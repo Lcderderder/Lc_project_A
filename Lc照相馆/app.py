@@ -3,7 +3,6 @@ from flask_cors import CORS
 from datetime import datetime
 import os
 from werkzeug.utils import secure_filename
-
 from config import Config
 from models import db, Photo
 from utils import save_photo, allowed_file
@@ -16,7 +15,7 @@ def create_app():
     db.init_app(app)
     CORS(app)
     
-    # 确保上传目录存在
+    # 确保上传目录和静态目录存在
     Config.init_app(app)
     
     # 创建数据库表
@@ -27,7 +26,22 @@ def create_app():
 
 app = create_app()
 
-# 静态文件路由 - 提供上传的照片
+# --------------------------
+# 新增：静态文件路由（核心功能）
+# --------------------------
+# 1. 托管static文件夹下的所有静态文件（HTML、CSS、JS等）
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(app.config['STATIC_FOLDER'], filename)
+
+# 2. 首页路由：访问http://localhost:5000时，直接返回Lc照相馆.html
+@app.route('/')
+def index():
+    return send_from_directory(app.config['STATIC_FOLDER'], 'Lc照相馆.html')
+
+# --------------------------
+# 原有：照片文件访问路由（无需修改）
+# --------------------------
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -36,7 +50,9 @@ def uploaded_file(filename):
 def uploaded_thumbnail(filename):
     return send_from_directory(app.config['THUMBNAIL_FOLDER'], filename)
 
-# API路由
+# --------------------------
+# 原有：API接口路由（无需修改）
+# --------------------------
 @app.route('/api/photos', methods=['GET'])
 def get_photos():
     # 获取查询参数
@@ -165,7 +181,9 @@ def delete_photo(photo_id):
     
     return jsonify({'message': '照片删除成功'})
 
-# 错误处理
+# --------------------------
+# 原有：错误处理（无需修改）
+# --------------------------
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': '资源未找到'}), 404
