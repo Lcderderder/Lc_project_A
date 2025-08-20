@@ -15,6 +15,7 @@ from PyQt5.QtGui import QPixmap, QIcon, QFont, QColor, QCloseEvent, QPalette
 import requests
 from PIL import Image
 import io
+from config import Config
 
 # 修复导入问题
 from flask import current_app
@@ -55,7 +56,7 @@ class BackendCheckThread(QThread):
 class PhotoManager(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.api_base_url = "http://localhost:5000/api"
+        self.api_base_url = Config.API_BASE_URL
         self.current_photo_id = None
         self.photos = []
         self.backend_process = None  
@@ -457,7 +458,7 @@ class PhotoManager(QMainWindow):
 
             try:
                 if photo.get('thumbnail'):
-                    thumb_response = requests.get(f"{self.api_base_url}/uploads/thumbnails/{photo['thumbnail']}")
+                    thumb_response = requests.get(f"{Config.THUMBNAIL_FOLDER}/{photo['thumbnail']}")
                     if thumb_response.status_code == 200:
                         img_data = thumb_response.content
                         pixmap = QPixmap()
@@ -525,7 +526,7 @@ class PhotoManager(QMainWindow):
                 self.category_input.setCurrentIndex(category_index)
 
             try:
-                img_response = requests.get(f"{self.api_base_url}/uploads/{photo['filename']}")
+                img_response = requests.get(f"{Config.BASE_URL}/uploads/{photo['filename']}")
                 if img_response.status_code == 200:
                     img_data = img_response.content
                     pixmap = QPixmap()
