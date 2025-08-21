@@ -283,6 +283,32 @@
             gap: 5px;
         }
 
+        /* 无照片时的空卡片样式 - 只显示基础卡片框架 */
+        .empty-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            padding: 30px 20px;
+            text-align: center;
+            color: #999;
+            transition: var(--transition);
+        }
+
+        .empty-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .empty-card i {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: #ccc;
+        }
+
+        .empty-card p {
+            font-weight: 500;
+        }
+
         /* 加载指示器 */
         .loading {
             display: flex;
@@ -383,50 +409,6 @@
 
         .submit-btn:hover {
             background: var(--secondary-color);
-        }
-
-        /* API文档样式 */
-        .api-docs {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 30px;
-            margin-top: 50px;
-            box-shadow: var(--shadow-md);
-        }
-
-        .api-docs h2 {
-            color: var(--primary-color);
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--primary-color);
-        }
-
-        .api-endpoint {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .api-method {
-            display: inline-block;
-            padding: 5px 10px;
-            background: var(--primary-color);
-            color: white;
-            border-radius: 4px;
-            font-weight: 600;
-            margin-right: 10px;
-        }
-
-        .api-url {
-            font-family: monospace;
-            font-size: 1.1rem;
-        }
-
-        .api-desc {
-            margin: 15px 0;
-            color: #555;
         }
 
         /* 详情模态框 */
@@ -580,59 +562,6 @@
             </div>
         </div>
 
-        <!-- API文档部分 -->
-        <div class="api-docs">
-            <h2>后端API接口文档</h2>
-            
-            <div class="api-endpoint">
-                <div>
-                    <span class="api-method">GET</span>
-                    <span class="api-url">/api/photos</span>
-                </div>
-                <p class="api-desc">获取所有照片列表，支持分页和筛选参数。</p>
-                <p><strong>参数:</strong> page, limit, year, category</p>
-                <p><strong>响应:</strong> { photos: [], total: 100 }</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <div>
-                    <span class="api-method">GET</span>
-                    <span class="api-url">/api/photos/{id}</span>
-                </div>
-                <p class="api-desc">根据ID获取单张照片的详细信息。</p>
-                <p><strong>响应:</strong> { id: 1, title: "毕业典礼", url: "...", date: "2025-06-10", category: "graduation" }</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <div>
-                    <span class="api-method">POST</span>
-                    <span class="api-url">/api/photos</span>
-                </div>
-                <p class="api-desc">上传新照片。</p>
-                <p><strong>参数:</strong> title, description, date, category, image(file)</p>
-                <p><strong>响应:</strong> { success: true, photoId: 101 }</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <div>
-                    <span class="api-method">PUT</span>
-                    <span class="api-url">/api/photos/{id}</span>
-                </div>
-                <p class="api-desc">更新照片信息。</p>
-                <p><strong>参数:</strong> title, description, date, category</p>
-                <p><strong>响应:</strong> { success: true }</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <div>
-                    <span class="api-method">DELETE</span>
-                    <span class="api-url">/api/photos/{id}</span>
-                </div>
-                <p class="api-desc">删除照片。</p>
-                <p><strong>响应:</strong> { success: true }</p>
-            </div>
-        </div>
-
         <footer>
             <p>© 2023 高中时光记忆馆 - 珍藏2022-2025每一刻美好回忆</p>
         </footer>
@@ -714,7 +643,6 @@
         // 配置参数
         const API_BASE_URL = 'http://localhost:5000/api';
         const B_FILE_YEARS = ['2025', '2024', '2023'];
-        const B_FILE_EMPTY_CARD = '<div class="photo-img"><i class="fas fa-image fa-3x"></i></div>';
         
         // 全局变量
         let isBackendConnected = false;
@@ -971,27 +899,29 @@
                 const photoGrid = document.getElementById(`photos-${year}`);
                 
                 if (photosByYear[year].length > 0) {
+                    // 有照片时 - 显示带照片容器的卡片
                     photosByYear[year].forEach(photo => {
                         const photoCard = createPhotoCard(photo);
                         photoGrid.appendChild(photoCard);
                     });
                 } else {
-                    // 无照片时使用B文件样式的空卡片
-                    const emptyCard = document.createElement('div');
-                    emptyCard.className = 'photo-card';
-                    emptyCard.innerHTML = `
-                        ${B_FILE_EMPTY_CARD}
-                        <div class="photo-info">
-                            <h3 class="photo-title">暂无照片</h3>
-                            <div class="photo-date">
-                                <i class="far fa-calendar-alt"></i>
-                                <span>--</span>
-                            </div>
-                        </div>
-                    `;
+                    // 无照片时 - 只显示基础卡片框架，不显示照片容器
+                    const emptyCard = createEmptyCard(`该年份暂无照片`);
                     photoGrid.appendChild(emptyCard);
                 }
             });
+            
+            // 如果没有任何照片数据
+            if (sortedYears.length === 0) {
+                const emptySection = document.createElement('div');
+                emptySection.className = 'timeline-year';
+                emptySection.innerHTML = `
+                    <div class="photo-grid">
+                        ${createEmptyCard('暂无任何照片数据').outerHTML}
+                    </div>
+                `;
+                timelineContainer.appendChild(emptySection);
+            }
         }
 
         /**
@@ -1040,28 +970,39 @@
                 
                 // 生成照片卡片
                 const photoGrid = document.getElementById(`photos-${year}`);
-                mockData[year].forEach(photo => {
-                    const card = document.createElement('div');
-                    card.className = 'photo-card';
-                    
-                    card.innerHTML = `
-                        ${B_FILE_EMPTY_CARD}
-                        <div class="photo-info">
-                            <h3 class="photo-title">${photo.title}</h3>
-                            <div class="photo-date">
-                                <i class="far fa-calendar-alt"></i>
-                                <span>${photo.date}</span>
+                
+                // 检查是否有模拟数据
+                if (mockData[year] && mockData[year].length > 0) {
+                    // 有模拟数据时显示完整卡片
+                    mockData[year].forEach(photo => {
+                        const card = document.createElement('div');
+                        card.className = 'photo-card';
+                        
+                        card.innerHTML = `
+                            <div class="photo-img">
+                                <i class="fas fa-image fa-3x"></i>
                             </div>
-                        </div>
-                    `;
-                    
-                    photoGrid.appendChild(card);
-                });
+                            <div class="photo-info">
+                                <h3 class="photo-title">${photo.title}</h3>
+                                <div class="photo-date">
+                                    <i class="far fa-calendar-alt"></i>
+                                    <span>${photo.date}</span>
+                                </div>
+                            </div>
+                        `;
+                        
+                        photoGrid.appendChild(card);
+                    });
+                } else {
+                    // 无模拟数据时显示空卡片框架
+                    const emptyCard = createEmptyCard(`该学年暂无照片`);
+                    photoGrid.appendChild(emptyCard);
+                }
             });
         }
 
         /**
-         * 创建照片卡片
+         * 创建带照片的卡片（有照片时使用）
          */
         function createPhotoCard(photo) {
             const card = document.createElement('div');
@@ -1071,8 +1012,8 @@
             const date = new Date(photo.date_taken);
             const formattedDate = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
             
-            // 照片内容（有图片显示图片，无图片用B样式）
-            let imgContent = B_FILE_EMPTY_CARD;
+            // 照片内容
+            let imgContent = '<div class="photo-img"><i class="fas fa-image fa-3x"></i></div>';
             if (photo.filename) {
                 const imgUrl = photo.thumbnail 
                     ? `${API_BASE_URL}/uploads/thumbnails/${photo.thumbnail}`
@@ -1093,6 +1034,21 @@
             
             // 点击打开详情模态框
             card.addEventListener('click', () => openPhotoDetail(photo));
+            
+            return card;
+        }
+
+        /**
+         * 创建空卡片（无照片时使用，只显示基础框架）
+         */
+        function createEmptyCard(message) {
+            const card = document.createElement('div');
+            card.className = 'empty-card';
+            
+            card.innerHTML = `
+                <i class="far fa-images"></i>
+                <p>${message}</p>
+            `;
             
             return card;
         }
