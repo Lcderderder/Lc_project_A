@@ -1,6 +1,4 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import os
 
 db = SQLAlchemy()
 
@@ -12,30 +10,33 @@ class Photo(db.Model):
     description = db.Column(db.Text)
     filename = db.Column(db.String(100), nullable=False)
     thumbnail = db.Column(db.String(100))
-    date_taken = db.Column(db.DateTime, nullable=False)
     category = db.Column(db.String(50), nullable=False)
-    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def to_dict(self):
+        """转换为字典（适配前端）"""
         return {
             'id': self.id,
             'title': self.title,
             'description': self.description,
             'filename': self.filename,
             'thumbnail': self.thumbnail,
-            'date_taken': self.date_taken.isoformat(),
-            'category': self.category,
-            'upload_date': self.upload_date.isoformat()
+            'category': self.category
         }
     
-    def delete_files(self):
-        # 删除实际的文件
+    def delete_files(self, app_config):
+        """删除原图+缩略图（接收配置，不依赖current_app）"""
+        # 删除原图
         if self.filename:
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], self.filename)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        
+            photo_path = os.path.join(
+                app_config['PHOTO_FOLDER'], self.category, self.filename
+            )
+            if os.path.exists(photo_path):
+                os.remove(photo_path)
+
+        # 删除缩略图
         if self.thumbnail:
-            thumb_path = os.path.join(current_app.config['THUMBNAIL_FOLDER'], self.thumbnail)
+            thumb_path = os.path.join(
+                app_config['THUMBNAIL_FOLDER'], self.category, self.thumbnail
+            )
             if os.path.exists(thumb_path):
                 os.remove(thumb_path)

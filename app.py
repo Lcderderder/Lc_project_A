@@ -1,11 +1,17 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from datetime import datetime
 import os
-from werkzeug.utils import secure_filename
+import threading
+import time
 from config import Config
 from models import db, Photo
-from utils import save_photo, allowed_file
+import photo_processing
+
+# ------------------------------
+# 核心：创建全局数据库锁，确保同一时间只有一个线程访问数据库
+# ------------------------------
+db_lock = threading.Lock()
+is_scanning = False  # 标记是否正在扫描（避免重复触发）
 
 def create_app():
     app = Flask(__name__)
@@ -13,177 +19,174 @@ def create_app():
     
     # 初始化扩展
     db.init_app(app)
-    CORS(app)
+    # 修复跨域：允许所有来源
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE"],
+            "allow_headers": ["Content-Type"],
+            "supports_credentials": True
+        }
+    })
     
-    # 确保上传目录和静态目录存在
+    # 确保基础文件夹存在
     Config.init_app(app)
     
-    # 创建数据库表
-    with app.app_context():
-        db.create_all()
+    # 后端启动后自动扫描（加锁，避免并发）
+    def auto_scan_after_start():
+        global is_scanning
+        time.sleep(2)  # 延迟2秒，确保Flask服务就绪
+        with app.app_context():
+            # 加锁：确保扫描期间其他线程无法访问数据库
+            if db_lock.acquire(blocking=False):  # 非阻塞获取锁，避免死锁
+                try:
+                    is_scanning = True
+                    print("="*50)
+                    print("后端启动完成，自动触发扫描（已加锁，禁止API访问）...")
+                    print("="*50)
+                    scan_result = photo_processing.scan_photo_folder()
+                    print(f"自动扫描结果：{scan_result['message']}")
+                finally:
+                    is_scanning = False
+                    db_lock.release()  # 无论成功失败，都释放锁
+                    print("数据库锁已释放，API可正常访问")
+            else:
+                print("获取数据库锁失败，扫描已在进行中")
+
+    # 启动自动扫描线程（守护线程，随主进程退出）
+    auto_scan_thread = threading.Thread(target=auto_scan_after_start, daemon=True)
+    auto_scan_thread.start()
     
     return app
 
 app = create_app()
 
-# --------------------------
-# 新增：静态文件路由（核心功能）
-# --------------------------
-# 1. 托管static文件夹下的所有静态文件（HTML、CSS、JS等）
+# ------------------------------
+# 静态文件+图片路由（不变）
+# ------------------------------
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory(app.config['STATIC_FOLDER'], filename)
 
-# 2. 首页路由：访问http://localhost:5000时，直接返回Lc照相馆.html
 @app.route('/')
 def index():
     return send_from_directory(app.config['STATIC_FOLDER'], 'Lc照相馆.html')
 
-# --------------------------
-# 原有：照片文件访问路由（无需修改）
-# --------------------------
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+@app.route('/photo/<category>/<filename>')
+def photo_file(category, filename):
+    return send_from_directory(os.path.join(app.config['PHOTO_FOLDER'], category), filename)
 
-@app.route('/uploads/thumbnails/<filename>')
-def uploaded_thumbnail(filename):
-    return send_from_directory(app.config['THUMBNAIL_FOLDER'], filename)
+@app.route('/photo/thumbnails/<category>/<filename>')
+def photo_thumbnail(category, filename):
+    thumb_folder = os.path.join(app.config['THUMBNAIL_FOLDER'], category)
+    print(f"访问缩略图：{thumb_folder}/{filename}")  
+    return send_from_directory(thumb_folder, filename)# ------------------------------
 
-# --------------------------
-# 原有：API接口路由（无需修改）
-# --------------------------
+# ------------------------------
+@app.route('/api/health', methods=['GET'])
+def api_health():
+    """健康检查：返回后端状态+扫描状态+数据库状态"""
+    global is_scanning
+    health_data = {
+        "backend_running": True,
+        "db_ready": False,
+        "scan_finished": not is_scanning,
+        "message": "后端运行中，数据库更新中（扫描未完成），暂时无法访问"
+    }
+
+    # 若未扫描，尝试检查数据库（加锁访问）
+    if not is_scanning:
+        if db_lock.acquire(blocking=False):
+            try:
+                photo_count = Photo.query.count()
+                health_data["db_ready"] = True
+                health_data["message"] = f"后端正常运行，数据库就绪（共{photo_count}张照片）"
+            except Exception:
+                health_data["db_ready"] = False
+                health_data["message"] = "后端运行中，数据库未初始化（首次扫描未完成）"
+            finally:
+                db_lock.release()
+
+    return jsonify(health_data), 200
+
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    """获取分类（基于文件夹，不依赖数据库，无需锁）"""
+    categories = [
+        f for f in os.listdir(app.config['PHOTO_FOLDER']) 
+        if os.path.isdir(os.path.join(app.config['PHOTO_FOLDER'], f)) and f != 'thumbnails'
+    ]
+    return jsonify(categories)
+
 @app.route('/api/photos', methods=['GET'])
 def get_photos():
-    # 获取查询参数
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 12, type=int)
-    year = request.args.get('year', type=int)
-    category = request.args.get('category', type=str)
-    
-    # 构建查询
-    query = Photo.query
-    
-    if year:
-        start_date = datetime(year, 9, 1)  # 9月是学年开始
-        end_date = datetime(year + 1, 6, 30)  # 次年6月是学年结束
-        query = query.filter(Photo.date_taken.between(start_date, end_date))
-    
-    if category and category != '全部':
-        query = query.filter(Photo.category == category)
-    
-    # 按时间倒序排列（最新的在前面）
-    query = query.order_by(Photo.date_taken.desc())
-    
-    # 分页
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    photos = pagination.items
-    
-    return jsonify({
-        'photos': [photo.to_dict() for photo in photos],
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'current_page': page
-    })
+    """获取照片：扫描中拒绝访问，否则加锁读取"""
+    global is_scanning
+    # 扫描中，直接返回提示
+    if is_scanning:
+        return jsonify({
+            'error': '数据库正在更新（扫描照片），请10秒后再试',
+            'photos': [], 'total': 0, 'pages': 0, 'current_page': request.args.get('page', 1)
+        }), 503  # 503：服务暂时不可用
 
-@app.route('/api/photos/<int:photo_id>', methods=['GET'])
-def get_photo(photo_id):
-    photo = Photo.query.get_or_404(photo_id)
-    return jsonify(photo.to_dict())
-
-@app.route('/api/photos', methods=['POST'])
-def upload_photo():
-    # 检查是否有文件部分
-    if 'photo' not in request.files:
-        return jsonify({'error': '没有文件部分'}), 400
-    
-    file = request.files['photo']
-    
-    # 如果用户没有选择文件
-    if file.filename == '':
-        return jsonify({'error': '没有选择文件'}), 400
-    
-    # 验证和处理文件
-    filename, thumbnail = save_photo(file)
-    if not filename:
-        return jsonify({'error': '不支持的文件类型'}), 400
-    
-    # 获取表单数据
-    title = request.form.get('title', '未命名照片')
-    description = request.form.get('description', '')
-    date_taken_str = request.form.get('date_taken')
-    category = request.form.get('category', '其他')
-    
-    # 解析日期
-    try:
-        date_taken = datetime.fromisoformat(date_taken_str) if date_taken_str else datetime.utcnow()
-    except ValueError:
-        date_taken = datetime.utcnow()
-    
-    # 创建照片记录
-    photo = Photo(
-        title=title,
-        description=description,
-        filename=filename,
-        thumbnail=thumbnail,
-        date_taken=date_taken,
-        category=category
-    )
-    
-    db.session.add(photo)
-    db.session.commit()
-    
-    return jsonify({
-        'message': '照片上传成功',
-        'photo': photo.to_dict()
-    }), 201
-
-@app.route('/api/photos/<int:photo_id>', methods=['PUT'])
-def update_photo(photo_id):
-    photo = Photo.query.get_or_404(photo_id)
-    
-    # 获取JSON数据
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({'error': '没有提供数据'}), 400
-    
-    # 更新字段
-    if 'title' in data:
-        photo.title = data['title']
-    if 'description' in data:
-        photo.description = data['description']
-    if 'date_taken' in data:
+    # 加锁读取数据，避免与其他操作冲突
+    if db_lock.acquire(blocking=True, timeout=5):  # 最多等待5秒，超时返回错误
         try:
-            photo.date_taken = datetime.fromisoformat(data['date_taken'])
-        except ValueError:
-            return jsonify({'error': '无效的日期格式'}), 400
-    if 'category' in data:
-        photo.category = data['category']
-    
-    db.session.commit()
-    
-    return jsonify({
-        'message': '照片更新成功',
-        'photo': photo.to_dict()
-    })
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 12, type=int)
+            category = request.args.get('category', type=str)
+
+            query = Photo.query
+            if category and category != 'all':
+                query = query.filter(Photo.category == category)
+            
+            query = query.order_by(Photo.id.desc())
+            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+            return jsonify({
+                'photos': [p.to_dict() for p in pagination.items],
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'current_page': page
+            })
+        except Exception as e:
+            return jsonify({
+                'error': f'读取数据失败：{str(e)}',
+                'photos': [], 'total': 0, 'pages': 0, 'current_page': page
+            }), 500
+        finally:
+            db_lock.release()
+    else:
+        return jsonify({
+            'error': '数据库繁忙，请稍后再试',
+            'photos': [], 'total': 0, 'pages': 0, 'current_page': request.args.get('page', 1)
+        }), 503
 
 @app.route('/api/photos/<int:photo_id>', methods=['DELETE'])
 def delete_photo(photo_id):
-    photo = Photo.query.get_or_404(photo_id)
-    
-    # 删除文件
-    photo.delete_files()
-    
-    # 删除数据库记录
-    db.session.delete(photo)
-    db.session.commit()
-    
-    return jsonify({'message': '照片删除成功'})
+    """删除照片：扫描中拒绝访问，否则加锁操作"""
+    global is_scanning
+    if is_scanning:
+        return jsonify({'error': '数据库正在更新（扫描照片），暂时无法删除'}), 503
 
-# --------------------------
-# 原有：错误处理（无需修改）
-# --------------------------
+    if db_lock.acquire(blocking=True, timeout=5):
+        try:
+            photo = Photo.query.get_or_404(photo_id)
+            photo.delete_files(app.config)
+            db.session.delete(photo)
+            db.session.commit()
+            return jsonify({'message': '删除成功'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+        finally:
+            db_lock.release()
+    else:
+        return jsonify({'error': '数据库繁忙，请稍后再试'}), 503
+
+# ------------------------------
+# 错误处理（不变）
+# ------------------------------
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': '资源未找到'}), 404
