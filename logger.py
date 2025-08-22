@@ -3,28 +3,28 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
-# È·±£ÈÕÖ¾Ä¿Â¼´æÔÚ
+# ç¡®ä¿æ—¥å¿—ç›®å½•å­˜åœ¨
 LOG_DIR = "crash_reports"
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# ÈÕÖ¾ÎÄ¼şÃû£¨°üº¬ÈÕÆÚ£©
+# æ—¥å¿—æ–‡ä»¶åï¼ˆåŒ…å«æ—¥æœŸï¼‰
 LOG_FILENAME = os.path.join(LOG_DIR, f"app_{datetime.now().strftime('%Y%m%d')}.log")
 
 def setup_logger(name=__name__):
-    """ÅäÖÃÈÕÖ¾¼ÇÂ¼Æ÷£¬Êä³öµ½ÎÄ¼şºÍ¿ØÖÆÌ¨"""
+    # é…ç½®æ—¥å¿—è®°å½•å™¨ï¼Œè¾“å‡ºåˆ°æ–‡ä»¶å’Œæ§åˆ¶å°
     logger = logging.getLogger(name)
-    logger.setLevel(logging.ERROR)  # Ö»¼ÇÂ¼´íÎó¼¶±ğ¼°ÒÔÉÏ
+    logger.setLevel(logging.ERROR)  # åªè®°å½•é”™è¯¯çº§åˆ«åŠä»¥ä¸Š
 
-    # ±ÜÃâÖØ¸´ÅäÖÃ
+    # é¿å…é‡å¤é…ç½®
     if logger.handlers:
         return logger
 
-    # ÈÕÖ¾¸ñÊ½
+    # æ—¥å¿—æ ¼å¼
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s'
     )
 
-    # ÎÄ¼ş´¦ÀíÆ÷£¨ÂÖ×ªÈÕÖ¾£¬×î´ó5¸öÎÄ¼ş£¬Ã¿¸ö1MB£©
+    # æ–‡ä»¶å¤„ç†å™¨ï¼ˆè½®è½¬æ—¥å¿—ï¼Œæœ€å¤§5ä¸ªæ–‡ä»¶ï¼Œæ¯ä¸ª1MBï¼‰
     file_handler = RotatingFileHandler(
         LOG_FILENAME,
         maxBytes=1024 * 1024,  # 1MB
@@ -34,12 +34,12 @@ def setup_logger(name=__name__):
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.ERROR)
 
-    # ¿ØÖÆÌ¨´¦ÀíÆ÷
+    # æ§åˆ¶å°å¤„ç†å™¨
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     console_handler.setLevel(logging.ERROR)
 
-    # Ìí¼Ó´¦ÀíÆ÷
+    # æ·»åŠ å¤„ç†å™¨
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
