@@ -4,3 +4,4 @@ __pycache__
 photo
 app.db
 photo_data.db
+crash_reports
