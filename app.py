@@ -6,6 +6,10 @@ import time
 from config import Config
 from models import db, Photo
 import photo_processing
+from logger import setup_logger
+
+# 初始化日志器
+logger = setup_logger(__name__)
 
 # ------------------------------
 # 核心：创建全局数据库锁，确保同一时间只有一个线程访问数据库
@@ -150,8 +154,10 @@ def get_photos():
                 'current_page': page
             })
         except Exception as e:
+            error_msg = f'读取数据失败：{str(e)}'
+            logger.error(error_msg)
             return jsonify({
-                'error': f'读取数据失败：{str(e)}',
+                'error': error_msg,
                 'photos': [], 'total': 0, 'pages': 0, 'current_page': page
             }), 500
         finally:
@@ -178,6 +184,8 @@ def delete_photo(photo_id):
             return jsonify({'message': '删除成功'})
         except Exception as e:
             db.session.rollback()
+            error_msg = f'删除照片失败（ID: {photo_id}）：{str(e)}'
+            logger.error(error_msg)
             return jsonify({'error': str(e)}), 500
         finally:
             db_lock.release()
@@ -193,6 +201,8 @@ def not_found(error):
 
 @app.errorhandler(500)
 def internal_error(error):
+    error_msg = f'服务器内部错误：{str(error)}'
+    logger.error(error_msg)
     return jsonify({'error': '服务器内部错误'}), 500
 
 if __name__ == '__main__':

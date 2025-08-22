@@ -1,6 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
+import os
+from logger import setup_logger
 
 db = SQLAlchemy()
+logger = setup_logger(__name__)
 
 class Photo(db.Model):
     __tablename__ = 'photos'
@@ -31,7 +34,11 @@ class Photo(db.Model):
                 app_config['PHOTO_FOLDER'], self.category, self.filename
             )
             if os.path.exists(photo_path):
-                os.remove(photo_path)
+                try:
+                    os.remove(photo_path)
+                except Exception as e:
+                    error_msg = f'删除原图失败（{photo_path}）：{str(e)}'
+                    logger.error(error_msg)
 
         # 删除缩略图
         if self.thumbnail:
@@ -39,4 +46,8 @@ class Photo(db.Model):
                 app_config['THUMBNAIL_FOLDER'], self.category, self.thumbnail
             )
             if os.path.exists(thumb_path):
-                os.remove(thumb_path)
+                try:
+                    os.remove(thumb_path)
+                except Exception as e:
+                    error_msg = f'删除缩略图失败（{thumb_path}）：{str(e)}'
+                    logger.error(error_msg)
