@@ -6,6 +6,10 @@ import secrets
 from sqlalchemy.exc import SQLAlchemyError
 from models import db, Photo
 from config import Config
+from logger import setup_logger 
+
+# 初始化日志器
+logger = setup_logger(__name__) 
 
 # ------------------------------
 # 基础工具函数（不变）
@@ -33,12 +37,12 @@ def generate_thumbnail(file_path, category, filename):
     thumb_path = get_thumbnail_path(category, thumb_filename)
 
     try:
-        # 新增：检查文件是否可读
+        # 检查文件是否可读
         if not os.path.isfile(file_path) or not os.access(file_path, os.R_OK):
             raise Exception(f"文件不可读或不存在：{file_path}")
         
         img = Image.open(file_path)
-        # 新增：确保图片格式支持（避免PNG透明通道等问题）
+        # 确保图片格式支持（避免PNG透明通道等问题）
         if img.mode in ('RGBA', 'P'):
             img = img.convert('RGB')  # 转为RGB格式，避免保存失败
         img.thumbnail((300, 300))
@@ -46,7 +50,9 @@ def generate_thumbnail(file_path, category, filename):
         print(f"生成缩略图成功：{thumb_path}")  # 日志：确认生成路径
         return thumb_filename
     except Exception as e:
-        print(f"生成缩略图失败（{category}/{filename}）：{str(e)}")  # 打印具体错误
+        error_msg=f"生成缩略图失败（{category}/{filename}）：{str(e)}"
+        print(error_msg)
+        logger.error(error_msg)
         # 容错：返回默认缩略图名（避免前端路径为空）
         return f"default_thumb{ext.lower()}"
 
@@ -136,6 +142,8 @@ def scan_photo_folder():
             except SQLAlchemyError as e:
                 db.session.rollback()
                 skipped_count += 1
+                error_msg = f"数据库操作失败（{category}/{filename}）：{str(e)}"
+                logger.error(error_msg)
 
     db.session.remove()
     return {

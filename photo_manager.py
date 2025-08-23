@@ -8,9 +8,13 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QLabel, QStatusBar)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon, QColor
+from logger import setup_logger
+
+# 初始化日志器
+logger = setup_logger(__name__)
 
 # ------------------------------
-# API健康检测线程（不变）
+# API健康检测线程
 # ------------------------------
 class APIHealthCheckThread(QThread):
     health_result = pyqtSignal(dict)
@@ -40,6 +44,8 @@ class APIHealthCheckThread(QThread):
                     "message": "后端未启动或端口占用"
                 })
             except Exception as e:
+                error_msg = f"健康检测错误：{str(e)}"
+                logger.error(error_msg)
                 self.health_result.emit({
                     "backend_running": False,
                     "db_ready": False,
@@ -211,6 +217,8 @@ class PhotoBackendManager(QMainWindow):
                 raise Exception(f"启动失败：{err_msg}")
 
         except Exception as e:
+            error_msg = f"启动后端失败：{str(e)}"
+            logger.error(error_msg)
             self.toggle_app_btn.setDisabled(False)
             self.toggle_app_btn.setText("启动 app.py 后端（自动扫描）")
             self.backend_status_label.setText("后端状态：启动失败")
@@ -255,6 +263,8 @@ class PhotoBackendManager(QMainWindow):
             except psutil.NoSuchProcess:
                 self.status_bar.showMessage("后端进程已不存在")
             except Exception as e:
+                error_msg = f"终止进程失败：{str(e)}"
+                logger.error(error_msg)
                 self.status_bar.showMessage(f"终止进程失败：{str(e)[:20]}")
         else:
             if self.app_process:
