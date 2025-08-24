@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon, QColor
 from logger import setup_logger
+from config import Config
 
 # 初始化日志器
 logger = setup_logger(__name__)
@@ -58,22 +59,22 @@ class APIHealthCheckThread(QThread):
         self.running = False
 
 # ------------------------------
-# 主管理窗口（核心修复：实时同步按钮禁用状态）
+# 主管理窗口
 # ------------------------------
 class PhotoBackendManager(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.api_health_url = "http://localhost:5000/api/health"
+        self.api_health_url = f"{Config.API_URL}health"
         self.app_process = None
         self.app_pid = None
         self.is_app_running = False  # 后端是否启动
-        self.is_scanning = False     # 新增：是否正在扫描（同步后端状态）
+        self.is_scanning = False     # 是否正在扫描（同步后端状态）
         self.health_thread = None
         self.initUI()
         self.centerWindow()
 
     def initUI(self):
-        # 窗口基础设置（不变）
+        # 窗口基础设置
         self.setWindowTitle("Lc照相馆 - 后端管理（自动扫描）")
         self.setGeometry(100, 100, 480, 300)
         icon_path = 'camera_icon.png'
@@ -82,14 +83,14 @@ class PhotoBackendManager(QMainWindow):
         else:
             self.setWindowIcon(QIcon.fromTheme("system-run"))
 
-        # 中心部件（不变）
+        # 中心部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(30, 30, 30, 30)
         main_layout.setSpacing(25)
 
-        # 状态显示区（不变）
+        # 状态显示区
         status_group = QWidget()
         status_layout = QVBoxLayout(status_group)
         status_layout.setSpacing(12)
@@ -147,7 +148,7 @@ class PhotoBackendManager(QMainWindow):
         window_geo.moveCenter(screen_geo.center())
         self.move(window_geo.topLeft())
 
-    # 启停app.py（核心：根据扫描状态控制按钮）
+    # 启停app.py（根据扫描状态控制按钮）
     def toggleApp(self):
         if not self.is_app_running:
             self.startApp()
