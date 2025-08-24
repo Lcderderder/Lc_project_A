@@ -2,17 +2,18 @@ from PIL import Image
 import os
 import hashlib
 import shutil
-import secrets
+import logging
 from sqlalchemy.exc import SQLAlchemyError
 from models import db, Photo
 from config import Config
-from logger import setup_logger 
+from datetime import datetime
 
-# 初始化日志器
-logger = setup_logger(__name__) 
+# 设置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ------------------------------
-# 基础工具函数（不变）
+# 基础工具函数
 # ------------------------------
 def allowed_file(filename):
     return '.' in filename and \
@@ -30,11 +31,16 @@ def get_thumbnail_path(category, thumb_filename):
     os.makedirs(thumb_category_folder, exist_ok=True)
     return os.path.join(thumb_category_folder, thumb_filename)
 
-def generate_thumbnail(file_path, category, filename):
-    random_hex = secrets.token_hex(8)
+def generate_thumbnail(file_path, category, filename, file_hash):
+    """生成缩略图，使用文件哈希值作为文件名"""
     _, ext = os.path.splitext(filename)
-    thumb_filename = f"{random_hex}_thumb{ext.lower()}"
+    thumb_filename = f"{file_hash}_thumb{ext.lower()}"
     thumb_path = get_thumbnail_path(category, thumb_filename)
+
+    # 如果缩略图已存在，直接返回
+    if os.path.exists(thumb_path):
+        logger.info(f"缩略图已存在，跳过生成：{thumb_path}")
+        return thumb_filename
 
     try:
         # 检查文件是否可读
@@ -42,44 +48,39 @@ def generate_thumbnail(file_path, category, filename):
             raise Exception(f"文件不可读或不存在：{file_path}")
         
         img = Image.open(file_path)
-        # 确保图片格式支持（避免PNG透明通道等问题）
+        # 确保图片格式支持
         if img.mode in ('RGBA', 'P'):
-            img = img.convert('RGB')  # 转为RGB格式，避免保存失败
+            img = img.convert('RGB')
         img.thumbnail((300, 300))
         img.save(thumb_path)
-        print(f"生成缩略图成功：{thumb_path}")  # 日志：确认生成路径
+        logger.info(f"生成缩略图成功：{thumb_path}")
         return thumb_filename
     except Exception as e:
-        error_msg=f"生成缩略图失败（{category}/{filename}）：{str(e)}"
-        print(error_msg)
-        logger.error(error_msg)
-        # 容错：返回默认缩略图名（避免前端路径为空）
+        logger.error(f"生成缩略图失败（{category}/{filename}）：{str(e)}")
+        # 容错：返回默认缩略图名
         return f"default_thumb{ext.lower()}"
 
-def check_and_complement_thumbnail(photo_path, category, photo_filename, thumb_filename):
-    # 强制生成新缩略图（不依赖旧文件名，避免空值）
-    print(f"检查缩略图：{category}/{photo_filename}")
-    return generate_thumbnail(photo_path, category, photo_filename)
-
+def check_and_complement_thumbnail(photo_path, category, photo_filename, file_hash):
+    """检查并补全缩略图"""
+    logger.info(f"检查缩略图：{category}/{photo_filename}")
+    return generate_thumbnail(photo_path, category, photo_filename, file_hash)
 
 # ------------------------------
-# 数据库+扫描函数（依赖app.py的全局锁，确保串行）
+# 数据库+扫描函数
 # ------------------------------
 def init_database():
-    """初始化数据库（仅被scan_photo_folder调用，已在app.py加锁）"""
+    """初始化数据库"""
     db_path = Config.SQLALCHEMY_DATABASE_URI.replace('sqlite:///', '')
     if os.path.exists(db_path):
         os.remove(db_path)
-        print(f"删除旧数据库：{db_path}")
+        logger.info(f"删除旧数据库：{db_path}")
 
     db.create_all()
-    print(f"新数据库 {db_path} 已创建")
+    logger.info(f"新数据库 {db_path} 已创建")
 
 def scan_photo_folder():
     """
-    扫描函数：
-    - 已在app.py的auto_scan_after_start中加锁，确保无并发
-    - 无需重复加锁，避免死锁
+    扫描照片文件夹并更新数据库
     """
     # 1. 初始化数据库
     init_database()
@@ -112,22 +113,23 @@ def scan_photo_folder():
                 skipped_count += 1
                 continue
 
-            # 生成唯一文件名
+            # 计算文件哈希值
             file_hash = get_file_hash(photo_path)
             _, ext = os.path.splitext(filename)
-            new_photo_filename = f"hash_{file_hash}{ext.lower()}"
+            new_photo_filename = f"{file_hash}{ext.lower()}"
             new_photo_path = os.path.join(category_photo_folder, new_photo_filename)
 
-            # 复制文件（防重名）
+            # 重命名文件（使用哈希值作为文件名）
             if not os.path.exists(new_photo_path):
-                shutil.copy2(photo_path, new_photo_path)
+                os.rename(photo_path, new_photo_path)
+                logger.info(f"重命名文件：{filename} -> {new_photo_filename}")
 
-            # 补全缩略图
+            # 生成缩略图
             thumb_filename = check_and_complement_thumbnail(
-                new_photo_path, category, new_photo_filename, None
+                new_photo_path, category, new_photo_filename, file_hash
             )
 
-            # 录入数据库（已在app.py加锁，无需额外处理）
+            # 录入数据库
             try:
                 new_photo = Photo(
                     title=os.path.splitext(filename)[0],
@@ -139,15 +141,17 @@ def scan_photo_folder():
                 db.session.add(new_photo)
                 db.session.commit()
                 added_count += 1
+                logger.info(f"成功添加照片到数据库：{category}/{new_photo_filename}")
             except SQLAlchemyError as e:
                 db.session.rollback()
                 skipped_count += 1
-                error_msg = f"数据库操作失败（{category}/{filename}）：{str(e)}"
-                logger.error(error_msg)
+                logger.error(f"数据库操作失败（{category}/{filename}）：{str(e)}")
 
     db.session.remove()
+    result_msg = f"扫描完成：新增{added_count}张，跳过{skipped_count}张"
+    logger.info(result_msg)
     return {
         "added": added_count,
         "skipped": skipped_count,
-        "message": f"扫描完成：新增{added_count}张，跳过{skipped_count}张"
+        "message": result_msg
     }
