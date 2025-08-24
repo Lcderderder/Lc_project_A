@@ -21,6 +21,9 @@ class Config:
     # 支持的图片格式（不变）
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
+    # 新增：自动扫描延迟（秒），避免服务未就绪时扫描
+    AUTO_SCAN_DELAY = 2
+
     @staticmethod
     def init_app(app):
         """创建基础文件夹（不变）"""
