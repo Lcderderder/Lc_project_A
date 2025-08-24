@@ -3,12 +3,16 @@ import os
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
+    BASE_URL="http://localhost:5000/"
+    API_URL=f"{BASE_URL}api/"
+
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key-here'
     # 数据库名：photo_data.db（完全由photo_processing.py控制）
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(basedir, 'photo_data.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    MAX_CONTENT_LENGTH = 40 * 1024 * 1024  # 16MB
+
 
     # 文件夹配置（不变）
     PHOTO_FOLDER = os.path.join(basedir, 'photo')
