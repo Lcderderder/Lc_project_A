@@ -40,7 +40,8 @@ def create_app():
     # 后端启动后自动扫描（加锁，避免并发）
     def auto_scan_after_start():
         global is_scanning
-        time.sleep(2)  # 延迟2秒，确保Flask服务就绪
+        # 使用配置中的延迟时间，避免硬编码
+        time.sleep(Config.AUTO_SCAN_DELAY)
         with app.app_context():
             # 加锁：确保扫描期间其他线程无法访问数据库
             if db_lock.acquire(blocking=False):
