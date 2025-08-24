@@ -1,9 +1,9 @@
 from flask_sqlalchemy import SQLAlchemy
 import os
-from logger import setup_logger
+import logging
 
 db = SQLAlchemy()
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
 
 class Photo(db.Model):
     __tablename__ = 'photos'
@@ -37,8 +37,7 @@ class Photo(db.Model):
                 try:
                     os.remove(photo_path)
                 except Exception as e:
-                    error_msg = f'删除原图失败（{photo_path}）：{str(e)}'
-                    logger.error(error_msg)
+                    logger.error(f"删除原图失败（{photo_path}）：{str(e)}")
 
         # 删除缩略图
         if self.thumbnail:
@@ -49,5 +48,4 @@ class Photo(db.Model):
                 try:
                     os.remove(thumb_path)
                 except Exception as e:
-                    error_msg = f'删除缩略图失败（{thumb_path}）：{str(e)}'
-                    logger.error(error_msg)
+                    logger.error(f"删除缩略图失败（{thumb_path}）：{str(e)}")
