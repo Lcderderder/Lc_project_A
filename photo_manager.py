@@ -3,11 +3,29 @@ import os
 import subprocess
 import time
 import requests
-import psutil
+import threading
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QLabel, QStatusBar, QTextEdit)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
+
+# 全局变量，标记psutil状态
+HAS_PSUTIL = False
+PSUTIL_WORKING = False  # 新增：psutil是否可正常工作
+psutil_error = ""       # 记录psutil错误信息
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+    # 验证psutil核心功能是否可用
+    try:
+        psutil.process_iter()  # 调用基础方法检测可用性
+        PSUTIL_WORKING = True
+    except Exception as e:
+        PSUTIL_WORKING = False
+        psutil_error = str(e)
+except ImportError:
+    psutil_error = "未安装psutil库"
 
 class APIHealthCheckThread(QThread):
     health_result = pyqtSignal(dict)
@@ -48,6 +66,7 @@ class APIHealthCheckThread(QThread):
 
     def stop(self):
         self.running = False
+        self.wait()
 
 class LogReaderThread(QThread):
     log_signal = pyqtSignal(str)
@@ -60,7 +79,6 @@ class LogReaderThread(QThread):
     def run(self):
         while self.running and self.process.poll() is None:
             try:
-                # 直接读取文本行，不需要decode
                 line = self.process.stdout.readline()
                 if line:
                     decoded_line = line.strip()
@@ -69,10 +87,80 @@ class LogReaderThread(QThread):
             except Exception as e:
                 self.log_signal.emit(f"日志读取错误：{str(e)}")
                 break
-            time.sleep(0.1)  # 添加短暂延迟，避免CPU占用过高
+            time.sleep(0.1)
 
     def stop(self):
         self.running = False
+        self.wait()
+
+class ProcessTerminationThread(QThread):
+    """新增：异步进程终止线程"""
+    termination_finished = pyqtSignal(bool, str)
+    
+    def __init__(self, app_pid, app_process):
+        super().__init__()
+        self.app_pid = app_pid
+        self.app_process = app_process
+
+    def run(self):
+        process_terminated = False
+        message = ""
+        
+        if self.app_pid and PSUTIL_WORKING:
+            try:
+                # 使用psutil终止进程
+                process = psutil.Process(self.app_pid)
+                
+                # 终止所有子进程
+                for child in process.children(recursive=True):
+                    try:
+                        child.terminate()
+                    except:
+                        pass
+                
+                # 终止主进程
+                process.terminate()
+                
+                # 等待进程结束
+                try:
+                    process.wait(timeout=5)
+                    process_terminated = True
+                    message = "进程已关闭"
+                except psutil.TimeoutExpired:
+                    # 如果优雅关闭失败，使用kill()
+                    for child in process.children(recursive=True):
+                        try:
+                            child.kill()
+                        except:
+                            pass
+                    process.kill()
+                    process.wait(timeout=3)
+                    process_terminated = True
+                    message = "进程已强制终止"
+                    
+            except psutil.NoSuchProcess:
+                process_terminated = True
+                message = "进程已不存在"
+            except Exception as e:
+                message = f"终止进程时出错: {str(e)}"
+        
+        elif self.app_process:
+            # 如果只有process对象没有pid，使用subprocess的方法
+            try:
+                self.app_process.terminate()
+                try:
+                    self.app_process.wait(timeout=5)
+                    process_terminated = True
+                    message = "进程已关闭"
+                except subprocess.TimeoutExpired:
+                    self.app_process.kill()
+                    self.app_process.wait(timeout=3)
+                    process_terminated = True
+                    message = "进程已强制关闭"
+            except Exception as e:
+                message = f"关闭进程失败: {str(e)}"
+        
+        self.termination_finished.emit(process_terminated, message)
 
 class PhotoBackendManager(QMainWindow):
     def __init__(self):
@@ -84,8 +172,42 @@ class PhotoBackendManager(QMainWindow):
         self.is_scanning = False
         self.health_thread = None
         self.log_thread = None
+        self.termination_thread = None  # 新增：进程终止线程
         self.initUI()
         self.centerWindow()
+        
+        # 检查psutil并初始化状态
+        self.check_psutil()
+
+    def check_psutil(self):
+        """检查psutil是否安装且可正常工作"""
+        if not HAS_PSUTIL:
+            self.append_log("ERROR 未检测到psutil库，无法可靠管理进程")
+            self.append_log("INFO 请执行命令安装: pip install psutil")
+            self.append_log("INFO 安装后重新启动本程序")
+            self._disable_backend_control("请安装psutil后使用")
+        elif not PSUTIL_WORKING:
+            self.append_log(f"ERROR psutil库存在但无法正常工作：{psutil_error}")
+            self.append_log("INFO 可能是编译问题，建议重新安装：pip uninstall -y psutil && pip install psutil")
+            self._disable_backend_control("psutil功能异常")
+        else:
+            self.append_log("INFO psutil库检测正常，进程管理功能可用")
+            self.status_bar.showMessage("就绪 - 启动后端后将自动扫描并创建数据库")
+
+    def _disable_backend_control(self, button_text):
+        """辅助方法：禁用后端控制按钮并更新样式"""
+        self.toggle_app_btn.setEnabled(False)
+        self.toggle_app_btn.setText(button_text)
+        self.toggle_app_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        self.status_bar.showMessage(f"错误：psutil异常，{button_text}")
 
     def initUI(self):
         # 窗口基础设置
@@ -187,13 +309,17 @@ class PhotoBackendManager(QMainWindow):
             self.stopApp()
 
     def startApp(self):
+        if not PSUTIL_WORKING:
+            self.append_log("ERROR 无法启动：psutil库不可用")
+            return
+
         self.toggle_app_btn.setDisabled(True)
         self.toggle_app_btn.setText("启动中...")
         self.backend_status_label.setText("后端状态：启动中...")
         self.backend_status_label.setStyleSheet("color: #ffc107;")
         self.scan_status_label.setText("扫描状态：等待后端启动...")
         self.status_bar.showMessage("正在启动 app.py 后端...")
-        self.log_display.clear()  # 清空之前的日志
+        self.log_display.clear()
 
         try:
             project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -201,27 +327,28 @@ class PhotoBackendManager(QMainWindow):
             if not os.path.exists(app_path):
                 raise FileNotFoundError(f"未找到 app.py（{app_path}）")
 
-            # 启动进程 - 使用文本模式，避免编码问题
+            # 启动进程
             self.app_process = subprocess.Popen(
                 [sys.executable, "app.py"],
                 cwd=project_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 bufsize=1,
-                universal_newlines=True,  # 使用文本模式
-                encoding='utf-8',        # 指定编码
-                errors='replace'         # 替换无法解码的字符
+                universal_newlines=True,
+                encoding='utf-8',
+                errors='replace'
             )
 
             self.app_pid = self.app_process.pid
-            self.log_display.append(f"[INFO] 后端进程启动，PID：{self.app_pid}")
+            self.append_log(f"INFO 后端进程启动，PID：{self.app_pid}")
 
             # 启动日志读取线程
             self.log_thread = LogReaderThread(self.app_process)
             self.log_thread.log_signal.connect(self.append_log)
             self.log_thread.start()
 
-            time.sleep(2)  # 给后端更多启动时间
+            # 等待进程启动确认
+            time.sleep(3)
             if self.app_process.poll() is None:
                 self.is_app_running = True
                 self.is_scanning = True
@@ -250,83 +377,65 @@ class PhotoBackendManager(QMainWindow):
             else:
                 # 读取进程输出
                 output, _ = self.app_process.communicate()
-                error_msg = output[:100] + "..." if output else "未知错误"
+                error_msg = output[:100] + "..." if output else "进程启动后立即退出"
                 raise Exception(f"启动失败：{error_msg}")
 
         except Exception as e:
-            error_msg = f"[ERROR] 启动后端失败：{str(e)}"
-            self.log_display.append(error_msg)
+            error_msg = f"ERROR 启动后端失败：{str(e)}"
+            self.append_log(error_msg)
             self.toggle_app_btn.setDisabled(False)
             self.toggle_app_btn.setText("启动 app.py 后端（自动扫描）")
             self.backend_status_label.setText("后端状态：启动失败")
             self.backend_status_label.setStyleSheet("color: #dc3545;")
             self.status_bar.showMessage(f"错误：{str(e)}")
+            
+            # 清理进程
+            if self.app_process:
+                try:
+                    self.app_process.terminate()
+                    self.app_process.wait(timeout=2)
+                except:
+                    pass
+                self.app_process = None
             self.app_pid = None
-            self.app_process = None
 
     def stopApp(self):
+        """关闭后端应用（异步方式）"""
+        if not PSUTIL_WORKING:
+            self.append_log("ERROR 无法关闭：psutil库不可用")
+            return
+
         self.toggle_app_btn.setDisabled(True)
         self.toggle_app_btn.setText("关闭中...")
         self.backend_status_label.setText("后端状态：关闭中...")
         self.backend_status_label.setStyleSheet("color: #ffc107;")
         self.status_bar.showMessage("正在关闭 app.py 后端...")
 
-        # 停止API检测线程
+        # 停止健康检查线程
         if self.health_thread and self.health_thread.isRunning():
             self.health_thread.stop()
-            self.health_thread.wait()
 
-        # 停止日志线程
+        # 停止日志读取线程
         if self.log_thread and self.log_thread.isRunning():
             self.log_thread.stop()
-            self.log_thread.wait()
 
-        # 终止进程
-        if self.app_pid:
-            try:
-                parent_process = psutil.Process(self.app_pid)
-                child_processes = parent_process.children(recursive=True)
-                for child in child_processes:
-                    try:
-                        child.terminate()
-                        child.wait(timeout=2)
-                        self.log_display.append(f"[INFO] 已终止子进程，PID：{child.pid}")
-                    except Exception as e:
-                        self.log_display.append(f"[WARN] 终止子进程PID {child.pid} 失败：{e}")
-                parent_process.terminate()
-                parent_process.wait(timeout=3)
-                if not psutil.pid_exists(self.app_pid):
-                    self.status_bar.showMessage("后端进程已成功终止")
-                    self.log_display.append("[INFO] 后端进程已正常终止")
-                else:
-                    parent_process.kill()
-                    self.log_display.append(f"[INFO] 强制终止后端进程，PID：{self.app_pid}")
-                    self.status_bar.showMessage("后端进程已强制终止")
-            except psutil.NoSuchProcess:
-                self.status_bar.showMessage("后端进程已不存在")
-                self.log_display.append("[INFO] 后端进程已不存在")
-            except Exception as e:
-                error_msg = f"[ERROR] 终止进程失败：{str(e)}"
-                self.log_display.append(error_msg)
-                self.status_bar.showMessage(f"终止进程失败：{str(e)[:20]}")
-        else:
-            if self.app_process:
-                try:
-                    self.app_process.terminate()
-                    self.app_process.wait(timeout=3)
-                    self.log_display.append("[INFO] 后端进程已终止")
-                except:
-                    try:
-                        self.app_process.kill()
-                        self.log_display.append("[INFO] 后端进程已强制终止")
-                    except:
-                        pass
-                finally:
-                    self.app_process = None
+        # 启动异步进程终止线程
+        self.termination_thread = ProcessTerminationThread(self.app_pid, self.app_process)
+        self.termination_thread.termination_finished.connect(self.onTerminationFinished)
+        self.termination_thread.start()
+
+    def onTerminationFinished(self, process_terminated, message):
+        """进程终止完成后的回调"""
+        if message:
+            self.append_log(f"INFO {message}")
 
         # 重置状态
         self.is_app_running = False
         self.is_scanning = False
+        self.app_process = None
+        self.app_pid = None
+
+        # 更新UI
         self.toggle_app_btn.setDisabled(False)
         self.toggle_app_btn.setText("启动 app.py 后端（自动扫描）")
         self.toggle_app_btn.setStyleSheet("""
@@ -350,6 +459,13 @@ class PhotoBackendManager(QMainWindow):
         self.scan_status_label.setStyleSheet("color: #ffc107;")
         self.db_status_label.setText("数据库状态：未就绪（扫描完成后自动就绪）")
         self.db_status_label.setStyleSheet("color: #ffc107;")
+        
+        if process_terminated:
+            self.status_bar.showMessage("后端已成功关闭")
+            self.append_log("INFO 后端服务已完全关闭")
+        else:
+            self.status_bar.showMessage("关闭后端时遇到问题")
+            self.append_log("WARN 关闭后端时可能遇到问题")
 
     def startAPIHealthCheck(self):
         self.health_thread = APIHealthCheckThread(self.api_health_url)
@@ -377,7 +493,7 @@ class PhotoBackendManager(QMainWindow):
                 }
             """)
             self.toggle_app_btn.setDisabled(False)
-            self.log_display.append("[WARN] 后端异常停止")
+            self.append_log("WARN 后端异常停止")
 
         # 2. 同步扫描状态
         self.is_scanning = not health_data["scan_finished"]
@@ -392,7 +508,7 @@ class PhotoBackendManager(QMainWindow):
                 self.toggle_app_btn.setDisabled(False)
                 self.scan_status_label.setText("扫描状态：已完成")
                 self.scan_status_label.setStyleSheet("color: #28a745;")
-                self.log_display.append("[INFO] 扫描已完成")
+                self.append_log("INFO 扫描已完成")
         else:
             self.toggle_app_btn.setText("启动 app.py 后端（自动扫描）")
 
@@ -415,7 +531,6 @@ class PhotoBackendManager(QMainWindow):
         self.status_bar.showMessage(f"系统状态：{health_data['message']}")
 
     def append_log(self, log_text):
-        # 添加时间戳到日志
         timestamp = time.strftime("%H:%M:%S")
         formatted_log = f"[{timestamp}] {log_text}"
         self.log_display.append(formatted_log)
@@ -426,17 +541,11 @@ class PhotoBackendManager(QMainWindow):
 
     def closeEvent(self, event):
         if self.is_app_running:
+            # 直接关闭后端，不弹窗确认
             self.stopApp()
         event.accept()
 
 def main():
-    try:
-        import psutil
-    except ImportError:
-        print("错误：缺少 psutil 库，无法可靠终止后端进程！")
-        print("请先执行：pip install psutil")
-        sys.exit(1)
-    
     app = QApplication(sys.argv)
     manager = PhotoBackendManager()
     manager.show()
