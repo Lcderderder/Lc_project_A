@@ -32,7 +32,7 @@ def get_thumbnail_path(category, thumb_filename):
     return os.path.join(thumb_category_folder, thumb_filename)
 
 def generate_thumbnail(file_path, category, filename, file_hash):
-    """生成缩略图，使用文件哈希值作为文件名"""
+    """生成缩略图，使用文件哈希值作为文件名，增强容错"""
     _, ext = os.path.splitext(filename)
     thumb_filename = f"{file_hash}_thumb{ext.lower()}"
     thumb_path = get_thumbnail_path(category, thumb_filename)
@@ -57,8 +57,13 @@ def generate_thumbnail(file_path, category, filename, file_hash):
         return thumb_filename
     except Exception as e:
         logger.error(f"生成缩略图失败（{category}/{filename}）：{str(e)}")
-        # 容错：返回默认缩略图名
-        return f"default_thumb{ext.lower()}"
+        # 容错：使用静态文件夹中的默认缩略图
+        default_thumb = "default_thumbnail.jpg"
+        default_thumb_path = os.path.join(Config.STATIC_FOLDER, default_thumb)
+        # 确保默认缩略图存在
+        if not os.path.exists(default_thumb_path):
+            logger.warning(f"默认缩略图不存在，请在 {Config.STATIC_FOLDER} 放置 {default_thumb}")
+        return default_thumb
 
 def check_and_complement_thumbnail(photo_path, category, photo_filename, file_hash):
     """检查并补全缩略图"""
