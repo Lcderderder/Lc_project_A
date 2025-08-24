@@ -86,16 +86,16 @@
         <footer>© 2024 高中时光记忆馆 - 按分类浏览</footer>
     </div>
     <script>
-        // 1. 基础配置（确保与后端端口一致）
-        const API_BASE_URL = 'http://localhost:5000';  // 重点：后端端口必须正确
-        let allPhotos = [];          // 存储所有照片数据
-        let allCategories = [];      // 存储所有分类
-        let currentFilter = {        // 当前筛选条件
+        // 1. 基础配置
+        const API_BASE_URL = 'http://localhost:5000';
+        let allPhotos = [];
+        let allCategories = [];
+        let currentFilter = {
             category: 'all',
             search: ''
         };
 
-        // 2. DOM元素（提前获取，避免重复查询）
+        // 2. DOM元素
         const photoContainer = document.getElementById('photo-container');
         const searchInput = document.getElementById('search-input');
         const categoryFilters = document.getElementById('category-filters');
@@ -103,53 +103,44 @@
         // 3. 页面加载完成后，启动初始化流程
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                // 关键：先加载分类，再加载照片（异步流程必须有顺序）
-                await loadCategories();  // 等待分类加载完成
-                await loadPhotos();       // 再加载照片
-                renderPhotos();           // 最后渲染页面
+                await loadCategories();
+                await loadPhotos();
+                renderPhotos();
             } catch (err) {
-                // 任何步骤失败，显示错误信息（不再一直加载）
                 photoContainer.className = 'error';
                 photoContainer.innerHTML = `<i class="fas fa-exclamation-circle"></i> 初始化失败：${err.message}`;
                 console.error('初始化错误：', err);
             }
-            // 绑定交互事件（无论初始化是否成功，都绑定）
             setupEvents();
         });
 
-        // 4. 绑定交互事件（搜索、分类切换）
+        // 4. 绑定交互事件
         function setupEvents() {
-            // 搜索功能（实时筛选）
             searchInput.addEventListener('input', () => {
                 currentFilter.search = searchInput.value.trim().toLowerCase();
-                renderPhotos();  // 输入变化时重新渲染
+                renderPhotos();
             });
 
-            // 分类切换（委托事件，避免动态添加分类按钮无法绑定）
             categoryFilters.addEventListener('click', (e) => {
                 const categoryBtn = e.target.closest('.category');
-                if (!categoryBtn) return;  // 点击非分类按钮，不处理
-                // 更新分类激活状态
+                if (!categoryBtn) return;
                 document.querySelectorAll('.category').forEach(btn => {
                     btn.classList.remove('active');
                 });
                 categoryBtn.classList.add('active');
-                // 更新筛选条件并重新渲染
                 currentFilter.category = categoryBtn.dataset.category;
                 renderPhotos();
             });
         }
 
-        // 5. 加载分类（异步函数，必须等待完成）
+        // 5. 加载分类
         async function loadCategories() {
             try {
                 console.log('开始加载分类...');
                 const response = await fetch(`${API_BASE_URL}/api/categories`);
-                // 检查API响应状态（非200即错误）
                 if (!response.ok) {
                     throw new Error(`分类API错误：${response.status} ${response.statusText}`);
                 }
-                // 解析JSON数据（确保数据格式正确）
                 const data = await response.json();
                 if (!Array.isArray(data)) {
                     throw new Error(`分类数据格式错误：预期数组，实际是${typeof data}`);
@@ -157,21 +148,20 @@
                 allCategories = data;
                 console.log('分类加载成功：', allCategories);
 
-                // 渲染分类按钮（动态添加到页面）
                 allCategories.forEach(category => {
                     const btn = document.createElement('div');
                     btn.className = 'category';
                     btn.textContent = category;
-                    btn.dataset.category = category;  // 存储分类标识
+                    btn.dataset.category = category;
                     categoryFilters.appendChild(btn);
                 });
             } catch (err) {
                 console.error('加载分类失败：', err);
-                throw new Error(`分类加载失败：${err.message}`);  // 抛出错误，终止后续流程
+                throw new Error(`分类加载失败：${err.message}`);
             }
         }
 
-        // 6. 加载照片（异步函数，必须等待完成）
+        // 6. 加载照片
         async function loadPhotos() {
             try {
                 console.log('开始加载照片...');
@@ -180,7 +170,6 @@
                     throw new Error(`照片API错误：${response.status} ${response.statusText}`);
                 }
                 const data = await response.json();
-                // 检查照片数据格式（必须包含photos数组）
                 if (!data || !Array.isArray(data.photos)) {
                     throw new Error(`照片数据格式错误：缺少photos数组`);
                 }
@@ -188,55 +177,46 @@
                 console.log('照片加载成功：共', allPhotos.length, '张');
             } catch (err) {
                 console.error('加载照片失败：', err);
-                throw new Error(`照片加载失败：${err.message}`);  // 抛出错误，终止后续流程
+                throw new Error(`照片加载失败：${err.message}`);
             }
         }
 
-        // 7. 渲染照片（同步函数，依赖allPhotos数据）
+        // 7. 渲染照片
         function renderPhotos() {
             console.log('开始渲染照片，筛选条件：', currentFilter);
-            // 步骤1：筛选照片（分类+搜索）
-            let filteredPhotos = [...allPhotos];  // 复制原数组，避免修改源数据
+            let filteredPhotos = [...allPhotos];
 
-            // 按分类筛选
             if (currentFilter.category !== 'all') {
                 filteredPhotos = filteredPhotos.filter(photo => 
                     photo.category === currentFilter.category
                 );
             }
 
-            // 按搜索关键词筛选（标题模糊匹配）
             if (currentFilter.search) {
                 filteredPhotos = filteredPhotos.filter(photo => 
                     photo.title.toLowerCase().includes(currentFilter.search)
                 );
             }
 
-            // 步骤2：渲染结果
             if (filteredPhotos.length === 0) {
                 photoContainer.className = 'loading';
                 photoContainer.innerHTML = '<i class="fas fa-search"></i> 没有找到匹配的照片';
                 return;
             }
 
-            // 步骤3：生成照片卡片HTML
             let photoHtml = '<div class="photo-grid">';
             filteredPhotos.forEach(photo => {
-                // 容错处理：确保关键字段不为空
                 const title = photo.title || '未命名照片';
                 const category = photo.category || '未分类';
                 const thumbnailName = photo.thumbnail || `default_thumb.${photo.filename?.split('.').pop() || 'jpg'}`;
-                // 拼接缩略图路径（与app.py路由严格一致）
                 const thumbnailUrl = `${API_BASE_URL}/photo/thumbnails/${category}/${thumbnailName}`;
 
-                // 单个照片卡片
                 photoHtml += `
                     <div class="photo-card">
                         <div class="photo-img">
                             <img 
                                 src="${thumbnailUrl}" 
                                 alt="${title}"
-                                // 加载失败时显示默认图，并打印错误
                                 onerror="this.src='https://via.placeholder.com/300x200?text=图片失效'; console.error('缩略图加载失败：', '${thumbnailUrl}')"
                             >
                         </div>
@@ -251,11 +231,11 @@
             });
             photoHtml += '</div>';
 
-            // 步骤4：更新页面DOM
-            photoContainer.className = '';  // 清除加载/错误样式
+            photoContainer.className = '';
             photoContainer.innerHTML = photoHtml;
             console.log('照片渲染完成：共', filteredPhotos.length, '张');
         }
     </script>
 </body>
 </html>
+[file content end]
