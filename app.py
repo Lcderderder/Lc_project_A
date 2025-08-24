@@ -7,6 +7,7 @@ from config import Config
 from models import db, Photo
 import photo_processing
 from logger import setup_logger
+from config import Config
 
 # 初始化日志器
 logger = setup_logger(__name__)
