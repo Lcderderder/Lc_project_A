@@ -3,195 +3,698 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高中时光记忆馆 - 按分类浏览</title>
+    <title>Lc记忆水晶</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --primary: #6d5dca;
-            --light: #f5f5f7;
-            --card-bg: rgba(255,255,255,0.85);
-            --shadow: 0 4px 12px rgba(0,0,0,0.1);
+            --primary-light: #8a7dd6;
+            --secondary: #ff7aa8;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --gray: #6c757d;
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 15px 40px rgba(0, 0, 0, 0.15);
+            --border-radius: 16px;
+            --transition: all 0.3s ease;
         }
-        * {margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif;}
-        body {background:linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);min-height:100vh;padding:20px;}
-        .container {max-width:1200px;margin:0 auto;}
-        header {
-            background:var(--card-bg);border-radius:16px;padding:20px;margin-bottom:30px;
-            box-shadow:var(--shadow);display:flex;align-items:center;gap:15px;
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
         }
-        .logo {display:flex;align-items:center;gap:10px;}
-        .logo h1 {font-size:1.6rem;color:var(--primary);}
-        .logo-icon {font-size:1.8rem;color:#ff7aa8;}
-        .search-bar {margin-bottom:30px;}
-        .search-box {position:relative;}
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* 头部布局 */
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            font-size: 2.2rem;
+            color: var(--secondary);
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .logo h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .search-bar {
+            flex: 1;
+            max-width: 450px;
+            margin: 0 30px;
+        }
+        
+        .search-box {
+            position: relative;
+        }
+        
         .search-box input {
-            width:100%;padding:12px 20px 12px 45px;border:none;border-radius:50px;
-            background:var(--card-bg);box-shadow:var(--shadow);font-size:1rem;
+            width: 100%;
+            padding: 14px 20px 14px 50px;
+            border: 2px solid transparent;
+            border-radius: 50px;
+            background: var(--light);
+            font-size: 1rem;
+            transition: var(--transition);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-        .search-icon {position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--primary);}
-        .categories {display:flex;gap:10px;flex-wrap:wrap;margin-bottom:30px;}
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary-light);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(109, 93, 202, 0.1);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+        
+        /* 分类导航 */
+        .categories {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            padding: 0 10px;
+        }
+        
         .category {
-            padding:8px 16px;background:var(--card-bg);border-radius:50px;cursor:pointer;
-            box-shadow:var(--shadow);transition:all 0.2s;
+            padding: 10px 20px;
+            background: var(--card-bg);
+            border: 2px solid transparent;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
         }
-        .category:hover, .category.active {background:var(--primary);color:white;}
+        
+        .category::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .category:hover::before {
+            left: 100%;
+        }
+        
+        .category:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--primary-light);
+        }
+        
+        .category.active {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 8px 20px rgba(109, 93, 202, 0.3);
+        }
+        
+        /* 图片网格布局 */
         .photo-grid {
-            display:grid;grid-template-columns:repeat(auto-fill, minmax(280px,1fr));
-            gap:25px;margin-bottom:50px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
         }
+        
+        /* 图片卡片样式 - 重点优化 */
         .photo-card {
-            background:var(--card-bg);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);
-            transition:transform 0.2s;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            position: relative;
+            transform-style: preserve-3d;
         }
-        .photo-img {height:220px;background:#e0e0e0;display:flex;align-items:center;justify-content:center;}
-        .photo-img img {width:100%;height:100%;object-fit:cover;}
-        .photo-info {padding:15px;}
-        .photo-title {font-weight:600;margin-bottom:8px;}
-        .photo-category {color:#777;font-size:0.9rem;display:flex;align-items:center;gap:5px;}
-        .loading {text-align:center;padding:40px;color:var(--primary);font-size:1.2rem;}
-        .loading i {animation:spin 1s linear infinite;margin-right:10px;}
-        @keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
-        .error {text-align:center;padding:40px;color:#dc3545;font-size:1.2rem;}
+        
+        .photo-card:hover {
+            transform: translateY(-8px) rotateX(2deg);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        .photo-img {
+            height: 250px;
+            background: linear-gradient(45deg, #e0e0e0, #f0f0f0);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .photo-img::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.3));
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 1;
+        }
+        
+        .photo-card:hover .photo-img::before {
+            opacity: 1;
+        }
+        
+        .photo-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: var(--transition);
+        }
+        
+        .photo-card:hover .photo-img img {
+            transform: scale(1.08);
+        }
+        
+        .photo-info {
+            padding: 20px;
+            position: relative;
+        }
+        
+        .photo-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: var(--transition);
+        }
+        
+        .photo-card:hover .photo-title {
+            color: var(--primary);
+        }
+        
+        .photo-category {
+            color: var(--gray);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .photo-category i {
+            color: var(--primary);
+        }
+        
+        /* 悬停效果标签 */
+        .photo-hover-label {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--primary);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: var(--transition);
+            z-index: 2;
+            backdrop-filter: blur(10px);
+        }
+        
+        .photo-card:hover .photo-hover-label {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* 加载和错误状态 */
+        .loading, .error {
+            text-align: center;
+            padding: 60px 20px;
+            font-size: 1.2rem;
+        }
+        
+        .loading {
+            color: var(--primary);
+        }
+        
+        .loading i {
+            animation: spin 1.5s linear infinite;
+            margin-right: 12px;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+        
+        /* 分页控件 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 40px 0;
+        }
+        
+        .page-btn {
+            padding: 10px 20px;
+            background: var(--card-bg);
+            border: 2px solid var(--light);
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+            box-shadow: var(--shadow);
+        }
+        
+        .page-btn:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .page-info {
+            padding: 0 20px;
+            color: var(--gray);
+            font-weight: 500;
+        }
+        
+        /* 页脚 */
         footer {
-            text-align:center;padding:20px;background:var(--card-bg);border-radius:16px;
-            box-shadow:var(--shadow);color:#777;
+            text-align: center;
+            padding: 25px;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            color: var(--gray);
+            margin-top: 30px;
         }
-        @media (max-width:768px) {
-            header {flex-direction:column;gap:15px;padding:15px;}
-            .photo-grid {grid-template-columns:repeat(auto-fill, minmax(220px,1fr));}
+        
+        /* 图片查看器 */
+        .image-viewer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .image-viewer.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .viewer-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+        }
+        
+        .viewer-image {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            color: white;
+            font-size: 2.2rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            opacity: 0.8;
+        }
+        
+        .close-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        
+        .viewer-caption {
+            color: white;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.3rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 1024px) {
+            .photo-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 25px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .header-container {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+            
+            .search-bar {
+                max-width: 100%;
+                margin: 0;
+            }
+            
+            .photo-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 20px;
+            }
+            
+            .categories {
+                justify-content: center;
+            }
+            
+            .close-btn {
+                top: -40px;
+                right: 0;
+                font-size: 1.8rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .photo-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .photo-img {
+                height: 220px;
+            }
+            
+            .category {
+                padding: 8px 16px;
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
+        <!-- 头部 -->
+        <div class="header-container">
             <div class="logo">
                 <i class="fas fa-camera-retro logo-icon"></i>
-                <h1>高中时光记忆馆</h1>
+                <h1>Lc记忆水晶</h1>
             </div>
-        </header>
-        <div class="search-bar">
-            <div class="search-box">
-                <i class="fas fa-search search-icon"></i>
-                <input type="text" id="search-input" placeholder="搜索照片标题...">
+            
+            <div class="search-bar">
+                <div class="search-box">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" id="search-input" placeholder="搜索照片标题...">
+                </div>
             </div>
         </div>
+        
+        <!-- 分类导航 -->
         <div class="categories" id="category-filters">
-            <div class="category active" data-category="all">全部</div>
+            <!-- 分类按钮将由JS动态生成 -->
         </div>
-        <!-- 初始状态：正在加载 -->
+        
+        <!-- 照片容器 -->
         <div id="photo-container" class="loading">
             <i class="fas fa-spinner"></i> 正在加载照片...
         </div>
-        <footer>© 2024 高中时光记忆馆 - 按分类浏览</footer>
+        
+        <!-- 分页控件 -->
+        <div class="pagination" id="pagination" style="display: none;">
+            <button class="page-btn" id="prev-page" disabled>
+                <i class="fas fa-chevron-left"></i> 上一页
+            </button>
+            <div class="page-info" id="page-info">第 1 页，共 1 页</div>
+            <button class="page-btn" id="next-page">
+                下一页 <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        
+        <footer>©Lc记忆水晶 V1 - 珍藏每一刻美好</footer>
     </div>
+
+    <!-- 图片查看器 -->
+    <div class="image-viewer" id="imageViewer">
+        <div class="viewer-content">
+            <button class="close-btn" id="closeViewer">
+                <i class="fas fa-times"></i>
+            </button>
+            <img src="" alt="大图预览" class="viewer-image" id="viewerImage">
+            <div class="viewer-caption" id="viewerCaption"></div>
+        </div>
+    </div>
+
     <script>
-        // 1. 基础配置
+        // 配置和变量
         const API_BASE_URL = 'http://localhost:5000';
+        const PHOTOS_PER_PAGE = 8;
+        
         let allPhotos = [];
         let allCategories = [];
-        let currentFilter = {
-            category: 'all',
-            search: ''
+        let currentFilter = { category: '', search: '' };
+        let currentPage = 1;
+        let totalPages = 1;
+
+        // DOM元素
+        const elements = {
+            photoContainer: document.getElementById('photo-container'),
+            searchInput: document.getElementById('search-input'),
+            categoryFilters: document.getElementById('category-filters'),
+            pagination: document.getElementById('pagination'),
+            prevPageBtn: document.getElementById('prev-page'),
+            nextPageBtn: document.getElementById('next-page'),
+            pageInfo: document.getElementById('page-info'),
+            imageViewer: document.getElementById('imageViewer'),
+            viewerImage: document.getElementById('viewerImage'),
+            viewerCaption: document.getElementById('viewerCaption'),
+            closeViewer: document.getElementById('closeViewer')
         };
 
-        // 2. DOM元素
-        const photoContainer = document.getElementById('photo-container');
-        const searchInput = document.getElementById('search-input');
-        const categoryFilters = document.getElementById('category-filters');
-
-        // 3. 页面加载完成后，启动初始化流程
+        // 初始化
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 await loadCategories();
-                await loadPhotos();
-                renderPhotos();
+                if (allCategories.length > 0) {
+                    currentFilter.category = allCategories[0];
+                    document.querySelectorAll('.category')[0]?.classList.add('active');
+                }
+                await loadAndRenderPhotos();
             } catch (err) {
-                photoContainer.className = 'error';
-                photoContainer.innerHTML = `<i class="fas fa-exclamation-circle"></i> 初始化失败：${err.message}`;
-                console.error('初始化错误：', err);
+                showError(err.message);
             }
             setupEvents();
         });
 
-        // 4. 绑定交互事件
+        // 事件绑定
         function setupEvents() {
-            searchInput.addEventListener('input', () => {
-                currentFilter.search = searchInput.value.trim().toLowerCase();
-                renderPhotos();
-            });
+            elements.searchInput.addEventListener('input', debounce(() => {
+                currentFilter.search = elements.searchInput.value.trim().toLowerCase();
+                currentPage = 1;
+                loadAndRenderPhotos();
+            }, 300));
 
-            categoryFilters.addEventListener('click', (e) => {
+            elements.categoryFilters.addEventListener('click', (e) => {
                 const categoryBtn = e.target.closest('.category');
                 if (!categoryBtn) return;
-                document.querySelectorAll('.category').forEach(btn => {
-                    btn.classList.remove('active');
-                });
+                
+                document.querySelectorAll('.category').forEach(btn => 
+                    btn.classList.remove('active')
+                );
+                
                 categoryBtn.classList.add('active');
                 currentFilter.category = categoryBtn.dataset.category;
-                renderPhotos();
+                currentPage = 1;
+                loadAndRenderPhotos();
+            });
+
+            elements.prevPageBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadAndRenderPhotos();
+                }
+            });
+
+            elements.nextPageBtn.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadAndRenderPhotos();
+                }
+            });
+
+            // 图片查看器事件
+            elements.closeViewer.addEventListener('click', closeImageViewer);
+            elements.imageViewer.addEventListener('click', (e) => {
+                if (e.target === elements.imageViewer) closeImageViewer();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeImageViewer();
             });
         }
 
-        // 5. 加载分类
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // 加载分类
         async function loadCategories() {
             try {
-                console.log('开始加载分类...');
                 const response = await fetch(`${API_BASE_URL}/api/categories`);
-                if (!response.ok) {
-                    throw new Error(`分类API错误：${response.status} ${response.statusText}`);
-                }
+                if (!response.ok) throw new Error('分类加载失败');
+                
                 const data = await response.json();
-                if (!Array.isArray(data)) {
-                    throw new Error(`分类数据格式错误：预期数组，实际是${typeof data}`);
-                }
-                allCategories = data;
-                console.log('分类加载成功：', allCategories);
-
-                allCategories.forEach(category => {
-                    const btn = document.createElement('div');
-                    btn.className = 'category';
-                    btn.textContent = category;
-                    btn.dataset.category = category;
-                    categoryFilters.appendChild(btn);
-                });
+                allCategories = Array.isArray(data) ? data : [];
+                
+                // 生成分类按钮
+                elements.categoryFilters.innerHTML = allCategories.map(category => `
+                    <div class="category" data-category="${category}">
+                        <i class="fas fa-folder"></i> ${category}
+                    </div>
+                `).join('');
             } catch (err) {
-                console.error('加载分类失败：', err);
-                throw new Error(`分类加载失败：${err.message}`);
+                console.error('加载分类失败:', err);
+                throw new Error('分类加载失败');
             }
         }
 
-        // 6. 加载照片
+        // 加载照片
         async function loadPhotos() {
             try {
-                console.log('开始加载照片...');
-                const response = await fetch(`${API_BASE_URL}/api/photos`);
-                if (!response.ok) {
-                    throw new Error(`照片API错误：${response.status} ${response.statusText}`);
+                let url = `${API_BASE_URL}/api/photos?page=${currentPage}&per_page=${PHOTOS_PER_PAGE}`;
+                if (currentFilter.category) {
+                    url += `&category=${encodeURIComponent(currentFilter.category)}`;
                 }
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('照片加载失败');
+                
                 const data = await response.json();
-                if (!data || !Array.isArray(data.photos)) {
-                    throw new Error(`照片数据格式错误：缺少photos数组`);
-                }
-                allPhotos = data.photos;
-                console.log('照片加载成功：共', allPhotos.length, '张');
+                allPhotos = data.photos || [];
+                totalPages = data.pages || 1;
             } catch (err) {
-                console.error('加载照片失败：', err);
-                throw new Error(`照片加载失败：${err.message}`);
+                console.error('加载照片失败:', err);
+                throw new Error('照片加载失败');
             }
         }
 
-        // 7. 渲染照片
-        function renderPhotos() {
-            console.log('开始渲染照片，筛选条件：', currentFilter);
-            let filteredPhotos = [...allPhotos];
-
-            if (currentFilter.category !== 'all') {
-                filteredPhotos = filteredPhotos.filter(photo => 
-                    photo.category === currentFilter.category
-                );
+        // 加载并渲染照片
+        async function loadAndRenderPhotos() {
+            showLoading();
+            try {
+                await loadPhotos();
+                updatePagination();
+                renderPhotos();
+            } catch (err) {
+                showError(err.message);
             }
+        }
 
+        // 更新分页
+        function updatePagination() {
+            elements.pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+            elements.pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+            elements.prevPageBtn.disabled = currentPage <= 1;
+            elements.nextPageBtn.disabled = currentPage >= totalPages;
+        }
+
+        // 渲染照片
+        function renderPhotos() {
+            let filteredPhotos = [...allPhotos];
+            
             if (currentFilter.search) {
                 filteredPhotos = filteredPhotos.filter(photo => 
                     photo.title.toLowerCase().includes(currentFilter.search)
@@ -199,26 +702,29 @@
             }
 
             if (filteredPhotos.length === 0) {
-                photoContainer.className = 'loading';
-                photoContainer.innerHTML = '<i class="fas fa-search"></i> 没有找到匹配的照片';
+                elements.photoContainer.className = 'loading';
+                elements.photoContainer.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-search" style="font-size: 3rem; color: var(--gray); margin-bottom: 20px;"></i>
+                        <p style="color: var(--gray); font-size: 1.1rem;">没有找到匹配的照片</p>
+                    </div>
+                `;
                 return;
             }
 
-            let photoHtml = '<div class="photo-grid">';
-            filteredPhotos.forEach(photo => {
+            const photosHtml = filteredPhotos.map(photo => {
                 const title = photo.title || '未命名照片';
                 const category = photo.category || '未分类';
                 const thumbnailName = photo.thumbnail || `default_thumb.${photo.filename?.split('.').pop() || 'jpg'}`;
                 const thumbnailUrl = `${API_BASE_URL}/photo/thumbnails/${category}/${thumbnailName}`;
+                const originalUrl = `${API_BASE_URL}/photo/${category}/${photo.filename}`;
 
-                photoHtml += `
+                return `
                     <div class="photo-card">
-                        <div class="photo-img">
-                            <img 
-                                src="${thumbnailUrl}" 
-                                alt="${title}"
-                                onerror="this.src='https://via.placeholder.com/300x200?text=图片失效'; console.error('缩略图加载失败：', '${thumbnailUrl}')"
-                            >
+                        <div class="photo-hover-label">点击查看大图</div>
+                        <div class="photo-img" data-original="${originalUrl}" data-title="${title}">
+                            <img src="${thumbnailUrl}" alt="${title}" 
+                                 onerror="this.src='https://via.placeholder.com/400x300?text=图片加载失败'">
                         </div>
                         <div class="photo-info">
                             <h3 class="photo-title">${title}</h3>
@@ -228,14 +734,57 @@
                         </div>
                     </div>
                 `;
-            });
-            photoHtml += '</div>';
+            }).join('');
 
-            photoContainer.className = '';
-            photoContainer.innerHTML = photoHtml;
-            console.log('照片渲染完成：共', filteredPhotos.length, '张');
+            elements.photoContainer.className = '';
+            elements.photoContainer.innerHTML = `<div class="photo-grid">${photosHtml}</div>`;
+
+            // 绑定图片点击事件
+            document.querySelectorAll('.photo-img').forEach(imgContainer => {
+                imgContainer.addEventListener('click', () => {
+                    openImageViewer(
+                        imgContainer.dataset.original,
+                        imgContainer.dataset.title
+                    );
+                });
+            });
         }
+
+        // 图片查看器功能
+        function openImageViewer(url, title) {
+            elements.viewerImage.src = url;
+            elements.viewerCaption.textContent = title;
+            elements.imageViewer.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeImageViewer() {
+            elements.imageViewer.classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        // 状态显示函数
+        function showLoading() {
+            elements.photoContainer.className = 'loading';
+            elements.photoContainer.innerHTML = '<i class="fas fa-spinner"></i> 加载中...';
+        }
+
+        function showError(message) {
+            elements.photoContainer.className = 'error';
+            elements.photoContainer.innerHTML = `
+                <i class="fas fa-exclamation-circle"></i> ${message}
+                <p style="margin-top: 10px; font-size: 0.9rem;">
+                    <button onclick="loadAndRenderPhotos()" 
+                            style="background: var(--primary); color: white; border: none; 
+                                   padding: 8px 16px; border-radius: 5px; cursor: pointer;">
+                        重新加载
+                    </button>
+                </p>
+            `;
+        }
+
+        // 全局函数
+        window.loadAndRenderPhotos = loadAndRenderPhotos;
     </script>
 </body>
 </html>
-[file content end]
