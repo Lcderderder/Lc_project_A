@@ -7,16 +7,16 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary: #6d5dca;
-            --primary-light: #8a7dd6;
-            --secondary: #ff7aa8;
+            --primary: #8a7dd6;
+            --primary-light: #a59bd9;
+            --secondary: #ff9ab8;
             --light: #f8f9fa;
-            --dark: #343a40;
-            --gray: #6c757d;
-            --card-bg: rgba(255, 255, 255, 0.95);
-            --shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-            --shadow-hover: 0 15px 40px rgba(0, 0, 0, 0.15);
-            --border-radius: 16px;
+            --dark: #4a4a68;
+            --gray: #7a7a8c;
+            --card-bg: rgba(255, 250, 245, 0.98);
+            --shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 15px 40px rgba(0, 0, 0, 0.12);
+            --border-radius: 20px;
             --transition: all 0.3s ease;
         }
         
@@ -28,10 +28,19 @@
         }
         
         body {
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            background: linear-gradient(-45deg, #f8f2ff, #ffeef4, #e6f0ff, #e6fffd);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
             min-height: 100vh;
             padding: 20px;
             line-height: 1.6;
+            position: relative;
+        }
+        
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
         
         .container {
@@ -44,12 +53,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: var(--card-bg);
+            background: rgba(255, 255, 255, 0.85);
             border-radius: var(--border-radius);
             padding: 20px 30px;
             margin-bottom: 30px;
             box-shadow: var(--shadow);
             backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
         }
         
         .logo {
@@ -81,102 +91,91 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
-        .search-bar {
-            flex: 1;
-            max-width: 450px;
-            margin: 0 30px;
-        }
-        
         .search-box {
             position: relative;
+            width: 380px;
         }
         
-        .search-box input {
+        .search-input {
             width: 100%;
-            padding: 14px 20px 14px 50px;
-            border: 2px solid transparent;
-            border-radius: 50px;
-            background: var(--light);
+            padding: 12px 20px 12px 45px;
+            border-radius: 30px;
+            border: 1px solid rgba(138, 125, 214, 0.2);
+            background: rgba(255, 255, 255, 0.7);
             font-size: 1rem;
             transition: var(--transition);
-            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
         }
         
-        .search-box input:focus {
+        .search-input:focus {
             outline: none;
             border-color: var(--primary-light);
-            background: white;
-            box-shadow: 0 0 0 3px rgba(109, 93, 202, 0.1);
+            width: 105%;
+            box-shadow: 0 5px 20px rgba(138, 125, 214, 0.15);
         }
         
         .search-icon {
             position: absolute;
-            left: 18px;
+            left: 15px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--primary);
-            font-size: 1.1rem;
+            color: var(--gray);
         }
         
-        /* 分类导航 */
+        /* 分类筛选 */
         .categories {
             display: flex;
             gap: 12px;
-            flex-wrap: wrap;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: var(--border-radius);
             margin-bottom: 30px;
-            padding: 0 10px;
-        }
-        
-        .category {
-            padding: 10px 20px;
-            background: var(--card-bg);
-            border: 2px solid transparent;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: var(--transition);
+            overflow-x: auto;
+            scrollbar-width: thin;
             box-shadow: var(--shadow);
-            position: relative;
-            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.6);
         }
         
-        .category::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            transition: left 0.5s ease;
+        .categories::-webkit-scrollbar {
+            height: 6px;
         }
         
-        .category:hover::before {
-            left: 100%;
+        .categories::-webkit-scrollbar-thumb {
+            background: rgba(138, 125, 214, 0.3);
+            border-radius: 3px;
         }
         
-        .category:hover {
+        .category-btn {
+            padding: 8px 18px;
+            background: transparent;
+            border: 2px solid var(--primary-light);
+            border-radius: 30px;
+            color: var(--primary);
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: var(--transition);
+        }
+        
+        .category-btn:hover {
+            background: var(--primary-light);
+            color: white;
             transform: translateY(-2px);
-            box-shadow: var(--shadow-hover);
-            border-color: var(--primary-light);
         }
         
-        .category.active {
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        .category-btn.active {
+            background: var(--primary);
             color: white;
             border-color: var(--primary);
-            box-shadow: 0 8px 20px rgba(109, 93, 202, 0.3);
         }
         
-        /* 图片网格布局 */
+        /* 照片网格 */
         .photo-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 30px;
-            margin-bottom: 50px;
         }
         
-        /* 图片卡片样式 - 重点优化 */
         .photo-card {
             background: var(--card-bg);
             border-radius: var(--border-radius);
@@ -184,40 +183,21 @@
             box-shadow: var(--shadow);
             transition: var(--transition);
             position: relative;
-            transform-style: preserve-3d;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
         
         .photo-card:hover {
-            transform: translateY(-8px) rotateX(2deg);
+            transform: translateY(-8px);
             box-shadow: var(--shadow-hover);
         }
         
         .photo-img {
-            height: 250px;
-            background: linear-gradient(45deg, #e0e0e0, #f0f0f0);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
+            height: 220px;
             overflow: hidden;
             position: relative;
-        }
-        
-        .photo-img::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.3));
-            opacity: 0;
-            transition: var(--transition);
-            z-index: 1;
-        }
-        
-        .photo-card:hover .photo-img::before {
-            opacity: 1;
+            cursor: pointer;
         }
         
         .photo-img img {
@@ -225,15 +205,18 @@
             height: 100%;
             object-fit: cover;
             transition: var(--transition);
+            filter: brightness(0.98) contrast(1.05);
         }
         
         .photo-card:hover .photo-img img {
             transform: scale(1.08);
+            filter: brightness(1.05) sepia(0.1);
         }
         
         .photo-info {
             padding: 20px;
             position: relative;
+            flex-grow: 1;
         }
         
         .photo-title {
@@ -279,6 +262,7 @@
             transition: var(--transition);
             z-index: 2;
             backdrop-filter: blur(10px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
         
         .photo-card:hover .photo-hover-label {
@@ -306,6 +290,11 @@
             color: #dc3545;
         }
         
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
         /* 分页控件 */
         .pagination {
             display: flex;
@@ -317,8 +306,8 @@
         
         .page-btn {
             padding: 10px 20px;
-            background: var(--card-bg);
-            border: 2px solid var(--light);
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 10px;
             cursor: pointer;
             font-weight: 500;
@@ -349,11 +338,12 @@
         footer {
             text-align: center;
             padding: 25px;
-            background: var(--card-bg);
+            background: rgba(255, 255, 255, 0.85);
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
             color: var(--gray);
             margin-top: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
         }
         
         /* 图片查看器 */
@@ -441,18 +431,17 @@
                 text-align: center;
             }
             
-            .search-bar {
-                max-width: 100%;
-                margin: 0;
+            .search-box {
+                width: 100%;
+                max-width: 380px;
             }
             
-            .photo-grid {
-                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-                gap: 20px;
+            .logo h1 {
+                font-size: 1.5rem;
             }
             
-            .categories {
-                justify-content: center;
+            .viewer-content {
+                max-width: 95%;
             }
             
             .close-btn {
@@ -465,14 +454,20 @@
         @media (max-width: 480px) {
             .photo-grid {
                 grid-template-columns: 1fr;
+                gap: 20px;
             }
             
-            .photo-img {
-                height: 220px;
+            .container {
+                padding: 0 10px;
             }
             
-            .category {
-                padding: 8px 16px;
+            .header-container, .categories {
+                padding: 15px;
+                border-radius: 12px;
+            }
+            
+            .page-btn {
+                padding: 8px 15px;
                 font-size: 0.9rem;
             }
         }
@@ -481,21 +476,19 @@
 <body>
     <div class="container">
         <!-- 头部 -->
-        <div class="header-container">
+        <header class="header-container">
             <div class="logo">
                 <i class="fas fa-camera-retro logo-icon"></i>
                 <h1>Lc记忆水晶</h1>
             </div>
-            
-            <div class="search-bar">
-                <div class="search-box">
-                    <i class="fas fa-search search-icon"></i>
-                    <input type="text" id="search-input" placeholder="搜索照片标题...">
-                </div>
+            <div class="search-box">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="search-input" class="search-input" 
+                       placeholder="搜索照片标题...">
             </div>
-        </div>
+        </header>
         
-        <!-- 分类导航 -->
+        <!-- 分类筛选 -->
         <div class="categories" id="category-filters">
             <!-- 分类按钮将由JS动态生成 -->
         </div>
@@ -531,68 +524,58 @@
     </div>
 
     <script>
-        // 配置和变量
-        const API_BASE_URL = 'http://localhost:5000';
-        const PHOTOS_PER_PAGE = 8;
-        
+        // 全局变量
+        const PHOTOS_PER_PAGE = 12;
         let allPhotos = [];
-        let allCategories = [];
-        let currentFilter = { category: '', search: '' };
         let currentPage = 1;
         let totalPages = 1;
+        let totalPhotos = 0;
+
+        const currentFilter = {
+            category: '',  // 初始为空
+            search: ''
+        };
 
         // DOM元素
         const elements = {
             photoContainer: document.getElementById('photo-container'),
             searchInput: document.getElementById('search-input'),
             categoryFilters: document.getElementById('category-filters'),
-            pagination: document.getElementById('pagination'),
             prevPageBtn: document.getElementById('prev-page'),
             nextPageBtn: document.getElementById('next-page'),
             pageInfo: document.getElementById('page-info'),
             imageViewer: document.getElementById('imageViewer'),
             viewerImage: document.getElementById('viewerImage'),
             viewerCaption: document.getElementById('viewerCaption'),
+            pagination: document.getElementById('pagination'),
             closeViewer: document.getElementById('closeViewer')
         };
 
         // 初始化
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await loadCategories();
-                if (allCategories.length > 0) {
-                    currentFilter.category = allCategories[0];
-                    document.querySelectorAll('.category')[0]?.classList.add('active');
-                }
-                await loadAndRenderPhotos();
-            } catch (err) {
-                showError(err.message);
-            }
-            setupEvents();
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCategories();
+            loadAndRenderPhotos();
+            bindEvents();
         });
 
-        // 事件绑定
-        function setupEvents() {
-            elements.searchInput.addEventListener('input', debounce(() => {
-                currentFilter.search = elements.searchInput.value.trim().toLowerCase();
-                currentPage = 1;
+        // 绑定事件
+        function bindEvents() {
+            // 关闭图片查看器
+            elements.closeViewer.addEventListener('click', closeImageViewer);
+            elements.imageViewer.addEventListener('click', (e) => {
+                if (e.target === elements.imageViewer) {
+                    closeImageViewer();
+                }
+            });
+
+            // 搜索框事件
+            elements.searchInput.addEventListener('input', debounce((e) => {
+                currentFilter.search = e.target.value.toLowerCase().trim();
+                currentPage = 1;  // 重置到第一页
                 loadAndRenderPhotos();
             }, 300));
 
-            elements.categoryFilters.addEventListener('click', (e) => {
-                const categoryBtn = e.target.closest('.category');
-                if (!categoryBtn) return;
-                
-                document.querySelectorAll('.category').forEach(btn => 
-                    btn.classList.remove('active')
-                );
-                
-                categoryBtn.classList.add('active');
-                currentFilter.category = categoryBtn.dataset.category;
-                currentPage = 1;
-                loadAndRenderPhotos();
-            });
-
+            // 分页事件
             elements.prevPageBtn.addEventListener('click', () => {
                 if (currentPage > 1) {
                     currentPage--;
@@ -606,68 +589,40 @@
                     loadAndRenderPhotos();
                 }
             });
-
-            // 图片查看器事件
-            elements.closeViewer.addEventListener('click', closeImageViewer);
-            elements.imageViewer.addEventListener('click', (e) => {
-                if (e.target === elements.imageViewer) closeImageViewer();
-            });
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeImageViewer();
-            });
-        }
-
-        // 防抖函数
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
         }
 
         // 加载分类
         async function loadCategories() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/categories`);
-                if (!response.ok) throw new Error('分类加载失败');
+                const response = await fetch('/api/categories');
+                if (!response.ok) throw new Error('加载分类失败');
                 
                 const data = await response.json();
-                allCategories = Array.isArray(data) ? data : [];
+                const categories = [...data.categories];  
                 
                 // 生成分类按钮
-                elements.categoryFilters.innerHTML = allCategories.map(category => `
-                    <div class="category" data-category="${category}">
-                        <i class="fas fa-folder"></i> ${category}
-                    </div>
-                `).join('');
-            } catch (err) {
-                console.error('加载分类失败:', err);
-                throw new Error('分类加载失败');
-            }
-        }
-
-        // 加载照片
-        async function loadPhotos() {
-            try {
-                let url = `${API_BASE_URL}/api/photos?page=${currentPage}&per_page=${PHOTOS_PER_PAGE}`;
-                if (currentFilter.category) {
-                    url += `&category=${encodeURIComponent(currentFilter.category)}`;
-                }
+                const categoryBtns = categories.map(cat => {
+                    const btn = document.createElement('button');
+                    btn.className = `category-btn ${cat === currentFilter.category ? 'active' : ''}`;
+                    btn.textContent = cat === 'all' ? '全部照片' : cat;
+                    btn.addEventListener('click', () => {
+                        currentFilter.category = cat;
+                        currentPage = 1;  // 重置到第一页
+                        document.querySelectorAll('.category-btn').forEach(b => 
+                            b.classList.remove('active')
+                        );
+                        btn.classList.add('active');
+                        loadAndRenderPhotos();
+                    });
+                    return btn;
+                });
                 
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('照片加载失败');
+                // 清空并添加按钮
+                elements.categoryFilters.innerHTML = '';
+                categoryBtns.forEach(btn => elements.categoryFilters.appendChild(btn));
                 
-                const data = await response.json();
-                allPhotos = data.photos || [];
-                totalPages = data.pages || 1;
             } catch (err) {
-                console.error('加载照片失败:', err);
-                throw new Error('照片加载失败');
+                console.error('分类加载失败:', err);
             }
         }
 
@@ -675,32 +630,45 @@
         async function loadAndRenderPhotos() {
             showLoading();
             try {
-                await loadPhotos();
-                updatePagination();
+                // 构建查询参数
+                const params = new URLSearchParams();
+                params.append('page', currentPage);
+                params.append('per_page', PHOTOS_PER_PAGE);
+                if (currentFilter.category !== 'all') {
+                    params.append('category', currentFilter.category);
+                }
+                
+                const response = await fetch(`/api/photos?${params.toString()}`);
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '加载照片失败');
+                }
+                
+                const data = await response.json();
+                
+                allPhotos = Array.isArray(data.photos) ? data.photos : [];
+                totalPhotos = data.total || 0;
+                totalPages = data.pages || 1;
+                currentPage = data.current_page || 1;
+                
                 renderPhotos();
+                updatePagination();
             } catch (err) {
                 showError(err.message);
             }
         }
 
-        // 更新分页
-        function updatePagination() {
-            elements.pagination.style.display = totalPages > 1 ? 'flex' : 'none';
-            elements.pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
-            elements.prevPageBtn.disabled = currentPage <= 1;
-            elements.nextPageBtn.disabled = currentPage >= totalPages;
-        }
-
         // 渲染照片
         function renderPhotos() {
+            // 应用搜索筛选
             let filteredPhotos = [...allPhotos];
-            
             if (currentFilter.search) {
                 filteredPhotos = filteredPhotos.filter(photo => 
                     photo.title.toLowerCase().includes(currentFilter.search)
                 );
             }
 
+            // 处理空状态
             if (filteredPhotos.length === 0) {
                 elements.photoContainer.className = 'loading';
                 elements.photoContainer.innerHTML = `
@@ -709,22 +677,24 @@
                         <p style="color: var(--gray); font-size: 1.1rem;">没有找到匹配的照片</p>
                     </div>
                 `;
+                elements.pagination.style.display = 'none';
                 return;
             }
 
+            // 生成照片HTML
             const photosHtml = filteredPhotos.map(photo => {
                 const title = photo.title || '未命名照片';
                 const category = photo.category || '未分类';
-                const thumbnailName = photo.thumbnail || `default_thumb.${photo.filename?.split('.').pop() || 'jpg'}`;
-                const thumbnailUrl = `${API_BASE_URL}/photo/thumbnails/${category}/${thumbnailName}`;
-                const originalUrl = `${API_BASE_URL}/photo/${category}/${photo.filename}`;
+                const thumbnailName = photo.thumbnail || photo.filename;
+                const thumbnailUrl = `/photo/thumbnails/${category}/${thumbnailName}`;
+                const originalUrl = `/photo/${category}/${photo.filename}`;
 
                 return `
                     <div class="photo-card">
                         <div class="photo-hover-label">点击查看大图</div>
                         <div class="photo-img" data-original="${originalUrl}" data-title="${title}">
                             <img src="${thumbnailUrl}" alt="${title}" 
-                                 onerror="this.src='https://via.placeholder.com/400x300?text=图片加载失败'">
+                                onerror="this.src='https://via.placeholder.com/400x300?text=图片加载失败'">
                         </div>
                         <div class="photo-info">
                             <h3 class="photo-title">${title}</h3>
@@ -736,6 +706,7 @@
                 `;
             }).join('');
 
+            // 渲染到页面
             elements.photoContainer.className = '';
             elements.photoContainer.innerHTML = `<div class="photo-grid">${photosHtml}</div>`;
 
@@ -748,6 +719,14 @@
                     );
                 });
             });
+        }
+
+        // 更新分页
+        function updatePagination() {
+            elements.pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+            elements.pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页 (共 ${totalPhotos} 张照片)`;
+            elements.prevPageBtn.disabled = currentPage <= 1;
+            elements.nextPageBtn.disabled = currentPage >= totalPages;
         }
 
         // 图片查看器功能
@@ -776,11 +755,21 @@
                 <p style="margin-top: 10px; font-size: 0.9rem;">
                     <button onclick="loadAndRenderPhotos()" 
                             style="background: var(--primary); color: white; border: none; 
-                                   padding: 8px 16px; border-radius: 5px; cursor: pointer;">
+                                padding: 8px 16px; border-radius: 5px; cursor: pointer;">
                         重新加载
                     </button>
                 </p>
             `;
+            elements.pagination.style.display = 'none';
+        }
+
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
         }
 
         // 全局函数
