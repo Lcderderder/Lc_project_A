@@ -1,114 +1,31 @@
-import sys
 import os
-import subprocess
+import sys
 import time
-import requests
-import threading
 import signal
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QPushButton, QLabel, QStatusBar, QTextEdit, QHBoxLayout, 
-                             QMessageBox)
+import subprocess
+import psutil
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QLabel, QPushButton, QTextEdit, QMessageBox, QStatusBar)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
 
-# 全局变量，标记psutil状态
-HAS_PSUTIL = False
+# 检查psutil是否可用
 PSUTIL_WORKING = False
-psutil_error = ""
-
 try:
     import psutil
-    HAS_PSUTIL = True
-    try:
-        psutil.process_iter()
-        PSUTIL_WORKING = True
-    except Exception as e:
-        PSUTIL_WORKING = False
-        psutil_error = str(e)
+    PSUTIL_WORKING = True
 except ImportError:
-    psutil_error = "未安装psutil库"
+    pass
 
-class APIHealthCheckThread(QThread):
-    health_result = pyqtSignal(dict)
-    
-    def __init__(self, api_url):
-        super().__init__()
-        self.api_url = api_url
-        self.running = True
-
-    def run(self):
-        while self.running:
-            try:
-                res = requests.get(self.api_url, timeout=5)  # 增加超时时间
-                if res.status_code == 200:
-                    self.health_result.emit(res.json())
-                else:
-                    self.health_result.emit({
-                        "backend_running": False,
-                        "db_ready": False,
-                        "scan_finished": False,
-                        "message": "后端响应异常"
-                    })
-            except requests.exceptions.ConnectionError:
-                self.health_result.emit({
-                    "backend_running": False,
-                    "db_ready": False,
-                    "scan_finished": False,
-                    "message": "后端未启动或端口占用"
-                })
-            except requests.exceptions.Timeout:
-                self.health_result.emit({
-                    "backend_running": True,  # 后端可能在运行但响应慢
-                    "db_ready": False,
-                    "scan_finished": False,
-                    "message": "后端响应超时，可能正在扫描中"
-                })
-            except Exception as e:
-                self.health_result.emit({
-                    "backend_running": False,
-                    "db_ready": False,
-                    "scan_finished": False,
-                    "message": f"检测错误：{str(e)[:15]}"
-                })
-            time.sleep(3)  # 增加检查间隔
-
-    def stop(self):
-        self.running = False
-        self.wait()
-
-class LogReaderThread(QThread):
-    log_signal = pyqtSignal(str)
-    
-    def __init__(self, process):
-        super().__init__()
-        self.process = process
-        self.running = True
-
-    def run(self):
-        while self.running and self.process.poll() is None:
-            try:
-                line = self.process.stdout.readline()
-                if line:
-                    decoded_line = line.strip()
-                    if decoded_line:
-                        self.log_signal.emit(decoded_line)
-            except Exception as e:
-                self.log_signal.emit(f"日志读取错误：{str(e)}")
-                break
-            time.sleep(0.1)
-
-    def stop(self):
-        self.running = False
-        self.wait()
-
-class ProcessTerminationThread(QThread):
-    """重写：异步进程终止线程，解决阻塞问题"""
+class TerminationThread(QThread):
+    """后台线程处理进程终止"""
     termination_finished = pyqtSignal(bool, str)
-    
-    def __init__(self, app_pid, app_process):
-        super().__init__()
-        self.app_pid = app_pid
+
+    def __init__(self, app_process, app_pid, parent=None):
+        super().__init__(parent)
         self.app_process = app_process
+        self.app_pid = app_pid
+        self.running = True
 
     def run(self):
         process_terminated = False
@@ -116,12 +33,11 @@ class ProcessTerminationThread(QThread):
         port_cleaned = False
         
         # 第一步：尝试优雅关闭
-        if self.app_process:
+        if self.app_process and self.running:
             try:
-                # 尝试正常终止
-                if os.name == 'nt':  # Windows
+                if os.name == 'nt':
                     self.app_process.terminate()
-                else:  # Unix/Linux
+                else:
                     os.kill(self.app_pid, signal.SIGTERM)
                 
                 # 等待进程结束
@@ -130,7 +46,9 @@ class ProcessTerminationThread(QThread):
                     process_terminated = True
                     message = "进程已正常关闭"
                 except (subprocess.TimeoutExpired, TimeoutError):
-                    # 正常关闭超时，尝试强制关闭
+                    if not self.running:
+                        return
+                    # 强制关闭
                     try:
                         if os.name == 'nt':
                             self.app_process.kill()
@@ -139,18 +57,16 @@ class ProcessTerminationThread(QThread):
                         self.app_process.wait(timeout=2)
                         process_terminated = True
                         message = "进程已强制关闭"
-                    except:
-                        message = "强制关闭失败"
+                    except Exception as e:
+                        message = f"强制关闭失败: {str(e)}"
             except Exception as e:
                 message = f"关闭进程失败: {str(e)}"
         
-        # 第二步：如果进程仍然存在或psutil可用，使用psutil清理
-        if not process_terminated and PSUTIL_WORKING:
+        # 第二步：psutil清理
+        if not process_terminated and PSUTIL_WORKING and self.running:
             try:
-                # 清理占用5000端口的进程
                 port_cleaned = self.cleanup_port(5000)
                 
-                # 如果知道PID，尝试终止特定进程
                 if self.app_pid:
                     try:
                         process = psutil.Process(self.app_pid)
@@ -161,25 +77,25 @@ class ProcessTerminationThread(QThread):
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                         process_terminated = True
                         message = "进程已不存在"
-                    except Exception:
-                        # 如果终止失败，尝试强制杀死
+                    except Exception as e:
+                        if not self.running:
+                            return
                         try:
                             process = psutil.Process(self.app_pid)
                             process.kill()
                             process.wait(timeout=2)
                             process_terminated = True
                             message = "进程已强制杀死"
-                        except:
-                            pass
+                        except Exception as e:
+                            message = f"psutil杀死进程失败: {str(e)}"
                 
                 if port_cleaned:
                     message += "，端口已清理"
-                    
             except Exception as e:
-                message = f"使用psutil关闭时出错: {str(e)}"
+                message = f"psutil操作出错: {str(e)}"
         
-        # 第三步：如果以上都失败，尝试系统命令清理
-        if not process_terminated:
+        # 第三步：系统命令清理
+        if not process_terminated and self.running:
             port_cleaned = self.cleanup_port_system(5000)
             if port_cleaned:
                 process_terminated = True
@@ -188,7 +104,6 @@ class ProcessTerminationThread(QThread):
         self.termination_finished.emit(process_terminated, message)
 
     def cleanup_port(self, port):
-        """使用psutil清理端口占用"""
         cleaned = False
         try:
             for conn in psutil.net_connections(kind='inet'):
@@ -198,83 +113,130 @@ class ProcessTerminationThread(QThread):
                         process.terminate()
                         process.wait(timeout=1)
                         cleaned = True
-                    except:
-                        try:
-                            process = psutil.Process(conn.pid)
-                            process.kill()
-                            process.wait(timeout=1)
-                            cleaned = True
-                        except:
-                            continue
-        except:
+                    except Exception:
+                        continue
+        except Exception:
             pass
         return cleaned
 
     def cleanup_port_system(self, port):
-        """使用系统命令清理端口占用"""
         cleaned = False
         try:
-            if os.name == 'nt':  # Windows
-                # 查找占用端口的进程
+            if os.name == 'nt':
                 result = subprocess.run(
                     ['netstat', '-ano', '|', 'findstr', f':{port}'],
-                    capture_output=True, text=True, shell=True
+                    capture_output=True, text=True, shell=True, timeout=5
                 )
                 if result.returncode == 0:
                     lines = result.stdout.split('\n')
                     for line in lines:
                         if f':{port}' in line and 'LISTENING' in line:
                             parts = line.split()
-                            pid = parts[-1]
-                            # 终止进程
-                            subprocess.run(['taskkill', '/F', '/PID', pid], 
-                                         capture_output=True)
-                            cleaned = True
-            else:  # Unix/Linux
-                # 查找占用端口的进程
+                            if len(parts) >= 5:
+                                pid = parts[-1]
+                                subprocess.run(
+                                    ['taskkill', '/F', '/PID', pid],
+                                    capture_output=True, timeout=3
+                                )
+                                cleaned = True
+            else:
                 result = subprocess.run(
                     ['lsof', '-ti', f':{port}'],
-                    capture_output=True, text=True
+                    capture_output=True, text=True, timeout=5
                 )
                 if result.returncode == 0:
                     pids = result.stdout.strip().split('\n')
                     for pid in pids:
-                        if pid:
-                            # 终止进程
-                            subprocess.run(['kill', '-9', pid], 
-                                         capture_output=True)
+                        if pid and pid.isdigit():
+                            subprocess.run(
+                                ['kill', '-9', pid],
+                                capture_output=True, timeout=3
+                            )
                             cleaned = True
-        except:
+        except Exception:
             pass
         return cleaned
+
+    def stop(self):
+        self.running = False
+        self.wait()
+
+class LogThread(QThread):
+    """日志输出线程"""
+    log_received = pyqtSignal(str)
+
+    def __init__(self, process, parent=None):
+        super().__init__(parent)
+        self.process = process
+        self.running = True
+
+    def run(self):
+        while self.running and self.process.poll() is None:
+            # 读取原始字节流，处理编码问题
+            line_bytes = self.process.stdout.readline()
+            if line_bytes:
+                try:
+                    # 尝试用UTF-8解码
+                    line = line_bytes.decode('utf-8').strip()
+                except UnicodeDecodeError:
+                    # 解码失败时用GBK尝试，仍失败则忽略错误字符
+                    try:
+                        line = line_bytes.decode('gbk', errors='replace').strip()
+                    except:
+                        line = f"[无法解码的日志: {line_bytes.hex()}]"
+                self.log_received.emit(line)
+            else:
+                time.sleep(0.1)
+
+    def stop(self):
+        self.running = False
+        self.wait()
+
+class HealthCheckThread(QThread):
+    """健康检查线程"""
+    health_updated = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.running = True
+
+    def run(self):
+        import requests
+        while self.running:
+            try:
+                response = requests.get("http://localhost:5000/api/health", timeout=2)
+                if response.status_code == 200:
+                    self.health_updated.emit(response.json())
+            except Exception:
+                self.health_updated.emit({
+                    'status': 'unhealthy',
+                    'scan_finished': True,
+                    'db_ready': False,
+                    'message': '无法连接后端'
+                })
+            time.sleep(2)  # 每2秒检查一次
+
+    def stop(self):
+        self.running = False
+        self.wait()
 
 class PhotoBackendManager(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.api_health_url = "http://localhost:5000/api/health"
-        self.app_process = None
-        self.app_pid = None
         self.is_app_running = False
         self.is_scanning = False
-        self.health_thread = None
+        self.app_process = None
+        self.app_pid = None
         self.log_thread = None
+        self.health_thread = None
         self.termination_thread = None
         self.initUI()
+        # 窗口居中显示
         self.centerWindow()
-        self.check_psutil()
-
-    def check_psutil(self):
-        if not HAS_PSUTIL:
-            self.append_log("WARN 未检测到psutil库，进程管理功能受限")
-            self.append_log("INFO 建议安装: pip install psutil")
-        elif not PSUTIL_WORKING:
-            self.append_log(f"WARN psutil库异常：{psutil_error}")
-        else:
-            self.append_log("INFO psutil库检测正常")
 
     def initUI(self):
         self.setWindowTitle("Lc照相馆 - 后端管理")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 800, 600)  # 初始位置(100,100)，大小800x600
         
         # 设置图标
         icon_path = 'camera_icon.png'
@@ -363,10 +325,15 @@ class PhotoBackendManager(QMainWindow):
         self.status_bar.showMessage("就绪 - 点击启动后端服务")
 
     def centerWindow(self):
-        screen_geo = QApplication.primaryScreen().availableGeometry()
-        window_geo = self.frameGeometry()
-        window_geo.moveCenter(screen_geo.center())
-        self.move(window_geo.topLeft())
+        """将窗口居中显示在屏幕上"""
+        # 获取窗口大小
+        frameGeometry = self.frameGeometry()
+        # 获取屏幕中心点
+        centerPoint = QApplication.desktop().availableGeometry().center()
+        # 将窗口中心与屏幕中心对齐
+        frameGeometry.moveCenter(centerPoint)
+        # 移动窗口到计算出的位置
+        self.move(frameGeometry.topLeft())
 
     def toggleApp(self):
         if not self.is_app_running:
@@ -375,95 +342,84 @@ class PhotoBackendManager(QMainWindow):
             self.stopApp()
 
     def startApp(self):
-        self.toggle_app_btn.setDisabled(True)
-        self.toggle_app_btn.setText("启动中...")
-        self.backend_status_label.setText("后端状态：启动中...")
-        self.backend_status_label.setStyleSheet("color: #ffc107;")
-        self.status_bar.showMessage("正在启动后端服务...")
-        self.log_display.clear()
-
         try:
-            project_dir = os.path.dirname(os.path.abspath(__file__))
-            app_path = os.path.join(project_dir, "app.py")
+            # 清理端口
+            self.append_log("INFO 正在检查并清理端口...")
+            temp_terminator = TerminationThread(None, None)
+            port_cleaned = temp_terminator.cleanup_port_system(5000)
+            if port_cleaned:
+                self.append_log("INFO 端口5000已清理")
+            else:
+                self.append_log("INFO 端口5000未被占用或清理失败")
             
-            if not os.path.exists(app_path):
-                raise FileNotFoundError(f"未找到 app.py")
-
-            # 检查端口是否被占用
-            if self.is_port_in_use(5000):
-                self.append_log("WARN 端口5000已被占用，尝试清理...")
-                self.cleanup_port(5000)
-
-            # 启动进程
+            self.append_log("INFO 正在启动后端服务...")
+            
+            # 启动后端进程
             self.app_process = subprocess.Popen(
                 [sys.executable, "app.py"],
-                cwd=project_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                bufsize=1,
-                universal_newlines=True,
-                encoding='utf-8',
-                errors='replace'
+                text=False,  # 以字节流方式读取，后续手动解码
+                bufsize=1
             )
-
             self.app_pid = self.app_process.pid
-            self.append_log(f"INFO 后端进程启动，PID：{self.app_pid}")
+            self.is_app_running = True
+            
+            # 更新UI
+            self.toggle_app_btn.setText("关闭 app.py 后端")
+            self.toggle_app_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #bb2d3b;
+                }
+            """)
+            self.backend_status_label.setText("后端状态：启动中...")
+            self.backend_status_label.setStyleSheet("color: #ffc107;")
+            self.status_bar.showMessage(f"后端已启动，PID: {self.app_pid}")
 
-            # 启动日志读取线程
-            self.log_thread = LogReaderThread(self.app_process)
-            self.log_thread.log_signal.connect(self.append_log)
+            # 启动日志线程
+            self.log_thread = LogThread(self.app_process)
+            self.log_thread.log_received.connect(self.append_log)
             self.log_thread.start()
 
-            # 等待进程启动
-            time.sleep(2)
-            if self.app_process.poll() is None:
-                self.is_app_running = True
-                self.updateUIForRunningState("启动中")
-                self.startAPIHealthCheck()
-            else:
-                output, _ = self.app_process.communicate()
-                error_msg = output[:100] + "..." if output else "进程启动失败"
-                raise Exception(f"启动失败：{error_msg}")
+            # 启动健康检查线程
+            self.health_thread = HealthCheckThread()
+            self.health_thread.health_updated.connect(self.updateHealthStatus)
+            self.health_thread.start()
 
         except Exception as e:
-            error_msg = f"ERROR 启动后端失败：{str(e)}"
-            self.append_log(error_msg)
+            self.append_log(f"ERROR 启动失败: {str(e)}")
             self.resetUIAfterFailure()
-            
-            # 清理进程
-            if self.app_process:
-                try:
-                    self.app_process.terminate()
-                    self.app_process.wait(timeout=1)
-                except:
-                    pass
-                self.app_process = None
-            self.app_pid = None
 
     def stopApp(self):
-        """关闭后端应用 - 重写版本"""
+        if not self.is_app_running:
+            return
+
+        self.append_log("INFO 正在关闭后端服务...")
         self.toggle_app_btn.setDisabled(True)
         self.toggle_app_btn.setText("关闭中...")
-        self.backend_status_label.setText("后端状态：关闭中...")
-        self.backend_status_label.setStyleSheet("color: #ffc107;")
-        self.status_bar.showMessage("正在关闭后端服务...")
-        self.append_log("INFO 开始关闭后端进程...")
 
-        # 停止健康检查线程
-        if self.health_thread and self.health_thread.isRunning():
+        # 停止健康检查和日志线程
+        if self.health_thread:
             self.health_thread.stop()
-
-        # 停止日志读取线程
-        if self.log_thread and self.log_thread.isRunning():
+            self.health_thread = None
+        if self.log_thread:
             self.log_thread.stop()
+            self.log_thread = None
 
-        # 启动异步进程终止线程
-        self.termination_thread = ProcessTerminationThread(self.app_pid, self.app_process)
+        # 启动终止线程
+        self.termination_thread = TerminationThread(self.app_process, self.app_pid)
         self.termination_thread.termination_finished.connect(self.onTerminationFinished)
         self.termination_thread.start()
 
     def onTerminationFinished(self, process_terminated, message):
-        """进程终止完成后的回调"""
         self.append_log(f"INFO {message}")
 
         # 重置状态
@@ -471,6 +427,7 @@ class PhotoBackendManager(QMainWindow):
         self.is_scanning = False
         self.app_process = None
         self.app_pid = None
+        self.termination_thread = None
 
         # 更新UI
         self.toggle_app_btn.setDisabled(False)
@@ -503,65 +460,7 @@ class PhotoBackendManager(QMainWindow):
             self.status_bar.showMessage("关闭后端时遇到问题")
             self.append_log("WARN 关闭后端时可能遇到问题")
 
-    def is_port_in_use(self, port):
-        """检查端口是否被占用"""
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(('localhost', port)) == 0
-
-    def cleanup_port(self, port):
-        """清理端口占用"""
-        cleaned = False
-        if PSUTIL_WORKING:
-            try:
-                for conn in psutil.net_connections(kind='inet'):
-                    if conn.laddr.port == port and conn.status == 'LISTEN':
-                        try:
-                            process = psutil.Process(conn.pid)
-                            process.terminate()
-                            process.wait(timeout=1)
-                            self.append_log(f"INFO 已清理占用端口{port}的进程")
-                            cleaned = True
-                        except:
-                            continue
-            except:
-                pass
-        return cleaned
-
-    def updateUIForRunningState(self, state):
-        """更新UI为运行状态"""
-        self.toggle_app_btn.setText(f"关闭 app.py 后端 ({state})")
-        self.toggle_app_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #bb2d3b;
-            }
-        """)
-        self.toggle_app_btn.setDisabled(False)
-
-    def resetUIAfterFailure(self):
-        """启动失败后重置UI"""
-        self.toggle_app_btn.setDisabled(False)
-        self.toggle_app_btn.setText("启动 app.py 后端")
-        self.backend_status_label.setText("后端状态：启动失败")
-        self.backend_status_label.setStyleSheet("color: #dc3545;")
-        self.status_bar.showMessage("启动失败，请检查日志")
-
-    def startAPIHealthCheck(self):
-        self.health_thread = APIHealthCheckThread(self.api_health_url)
-        self.health_thread.health_result.connect(self.updateHealthStatus)
-        self.health_thread.start()
-
     def updateHealthStatus(self, health_data):
-        # 1. 同步后端运行状态 - 修改逻辑
-        # 如果健康检查能返回数据，说明后端在运行，无论health_data中的值是什么
         if self.is_app_running:
             self.backend_status_label.setText("后端状态：运行中")
             self.backend_status_label.setStyleSheet("color: #28a745;")
@@ -569,7 +468,7 @@ class PhotoBackendManager(QMainWindow):
             self.backend_status_label.setText("后端状态：未启动")
             self.backend_status_label.setStyleSheet("color: #dc3545;")
 
-        # 2. 同步扫描状态
+        # 同步扫描状态
         self.is_scanning = not health_data.get("scan_finished", True)
         if self.is_app_running:
             if self.is_scanning:
@@ -584,7 +483,7 @@ class PhotoBackendManager(QMainWindow):
         else:
             self.toggle_app_btn.setText("启动 app.py 后端")
 
-        # 3. 同步数据库状态
+        # 同步数据库状态
         if health_data.get("db_ready", False):
             message = health_data.get("message", "")
             if "共" in message and "张照片" in message:
@@ -600,8 +499,15 @@ class PhotoBackendManager(QMainWindow):
             self.db_status_label.setText("数据库状态：未就绪")
             self.db_status_label.setStyleSheet("color: #ffc107;")
 
-        # 4. 同步状态栏
+        # 同步状态栏
         self.status_bar.showMessage(f"系统状态：{health_data.get('message', '未知状态')}")
+
+    def resetUIAfterFailure(self):
+        self.toggle_app_btn.setDisabled(False)
+        self.toggle_app_btn.setText("启动 app.py 后端")
+        self.backend_status_label.setText("后端状态：启动失败")
+        self.backend_status_label.setStyleSheet("color: #dc3545;")
+        self.status_bar.showMessage("启动失败，请检查日志")
 
     def append_log(self, log_text):
         timestamp = time.strftime("%H:%M:%S")
@@ -614,7 +520,6 @@ class PhotoBackendManager(QMainWindow):
 
     def closeEvent(self, event):
         if self.is_app_running:
-            # 用户确认
             reply = QMessageBox.question(
                 self, '确认关闭',
                 '后端服务正在运行，确定要关闭吗？',
@@ -625,7 +530,7 @@ class PhotoBackendManager(QMainWindow):
             if reply == QMessageBox.Yes:
                 self.stopApp()
                 # 等待进程终止
-                for _ in range(10):  # 最多等待5秒
+                for _ in range(10):
                     if not self.is_app_running:
                         break
                     time.sleep(0.5)
