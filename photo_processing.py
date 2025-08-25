@@ -1,206 +1,190 @@
-from PIL import Image
 import os
-import hashlib
-import shutil
-import logging
-from sqlalchemy.exc import SQLAlchemyError
-from models import db, Photo
-from config import Config
-from datetime import datetime
+from PIL import Image
+from flask import current_app
 
-# 设置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# ------------------------------
-# 基础工具函数
-# ------------------------------
+# 允许的图片文件后缀（与config一致）
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
+    """检查文件是否为支持的图片类型"""
+    if not filename:
+        return False
+    # 安全地获取文件扩展名
+    if '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in current_app.config['ALLOWED_EXTENSIONS']
 
-def get_file_hash(file_path):
-    """计算文件哈希值，增加错误处理"""
+def create_thumbnail(src_path, dest_path, size=None):
+    """生成缩略图并保存"""
     try:
-        hash_md5 = hashlib.md5()
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b''):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
-    except Exception as e:
-        logger.error(f"计算文件哈希失败 {file_path}: {str(e)}")
-        # 使用文件名和时间戳作为备用哈希
-        return hashlib.md5(f"{os.path.basename(file_path)}_{datetime.now().timestamp()}".encode()).hexdigest()
-
-def get_thumbnail_path(category, thumb_filename):
-    thumb_category_folder = os.path.join(Config.THUMBNAIL_FOLDER, category)
-    os.makedirs(thumb_category_folder, exist_ok=True)
-    return os.path.join(thumb_category_folder, thumb_filename)
-
-def generate_thumbnail(file_path, category, filename, file_hash):
-    """生成缩略图，使用文件哈希值作为文件名，增强容错"""
-    _, ext = os.path.splitext(filename)
-    thumb_filename = f"{file_hash}_thumb{ext.lower()}"
-    thumb_path = get_thumbnail_path(category, thumb_filename)
-
-    # 如果缩略图已存在，直接返回
-    if os.path.exists(thumb_path):
-        logger.info(f"缩略图已存在，跳过生成：{thumb_path}")
-        return thumb_filename
-
-    try:
-        # 检查文件是否可读
-        if not os.path.isfile(file_path) or not os.access(file_path, os.R_OK):
-            raise Exception(f"文件不可读或不存在：{file_path}")
+        # 验证源文件存在且可读
+        if not os.path.exists(src_path) or not os.access(src_path, os.R_OK):
+            current_app.logger.error(f"无法读取源文件: {src_path}")
+            return False
+            
+        size = size or current_app.config['THUMBNAIL_MAX_SIZE']
         
-        img = Image.open(file_path)
-        # 确保图片格式支持
-        if img.mode in ('RGBA', 'P'):
-            img = img.convert('RGB')
-        img.thumbnail(Config.THUMBNAIL_MAX_SIZE)
-        img.save(thumb_path)
-        logger.info(f"生成缩略图成功：{thumb_path}")
-        return thumb_filename
-    except Exception as e:
-        logger.error(f"生成缩略图失败（{category}/{filename}）：{str(e)}")
-        # 容错：使用静态文件夹中的默认缩略图
-        default_thumb = "default_thumbnail.jpg"
-        default_thumb_path = os.path.join(Config.STATIC_FOLDER, default_thumb)
-        # 确保默认缩略图存在
-        if not os.path.exists(default_thumb_path):
-            logger.warning(f"默认缩略图不存在，请在 {Config.STATIC_FOLDER} 放置 {default_thumb}")
-        return default_thumb
-
-def check_and_complement_thumbnail(photo_path, category, photo_filename, file_hash):
-    """检查并补全缩略图"""
-    logger.info(f"检查缩略图：{category}/{photo_filename}")
-    return generate_thumbnail(photo_path, category, photo_filename, file_hash)
-
-# ------------------------------
-# 数据库+扫描函数
-# ------------------------------
-def init_database(app):
-    """初始化数据库，需要传入Flask app实例"""
-    try:
-        db_path = Config.SQLALCHEMY_DATABASE_URI.replace('sqlite:///', '')
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            logger.info(f"删除旧数据库：{db_path}")
-
-        # 确保在应用上下文中创建数据库
-        with app.app_context():
-            db.create_all()
-            logger.info(f"新数据库 {db_path} 已创建")
+        # 验证图片完整性
+        try:
+            with Image.open(src_path) as img:
+                img.verify()  # 验证文件完整性
+        except (IOError, SyntaxError) as e:
+            current_app.logger.error(f"损坏的图片文件: {src_path} - {str(e)}")
+            return False
+        
+        # 重新打开图片进行处理
+        with Image.open(src_path) as img:
+            # 转换模式（如果需要）
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # 保持比例缩放
+            img.thumbnail(size)
+            
+            # 创建目标目录（如果不存在）
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            
+            # 保存缩略图
+            img.save(dest_path, optimize=True, quality=85)
+            
         return True
     except Exception as e:
-        logger.error(f"初始化数据库失败: {str(e)}")
+        current_app.logger.error(f"生成缩略图失败 {src_path} -> {dest_path}: {str(e)}")
         return False
 
 def scan_photo_folder(app):
-    """
-    扫描照片文件夹并更新数据库，需要传入Flask app实例
-    """
-    logger.info("开始扫描照片文件夹...")
-    
-    # 1. 初始化数据库
-    if not init_database(app):
-        logger.error("数据库初始化失败")
-        return {"added": 0, "skipped": 0, "message": "数据库初始化失败"}
+    """扫描照片目录，生成缩略图并更新数据库"""
+    from models import db, Photo
 
-    # 2. 遍历分类文件夹
-    photo_root = Config.PHOTO_FOLDER
+    photo_root = app.config['PHOTO_FOLDER']
+    thumbnail_root = app.config['THUMBNAIL_FOLDER']
+    new_count = 0
+    update_count = 0
+    error_count = 0
+
+    # 确保缩略图根目录存在
+    os.makedirs(thumbnail_root, exist_ok=True)
+
     try:
-        categories = [
-            f for f in os.listdir(photo_root) 
-            if os.path.isdir(os.path.join(photo_root, f)) and f != 'thumbnails'
-        ]
-        logger.info(f"找到分类: {categories}")
-    except Exception as e:
-        logger.error(f"读取分类文件夹失败: {str(e)}")
-        return {"added": 0, "skipped": 0, "message": f"读取分类文件夹失败: {str(e)}"}
+        all_items = os.listdir(photo_root)
+    except (FileNotFoundError, PermissionError) as e:
+        current_app.logger.error(f"无法访问照片根目录: {photo_root} - {str(e)}")
+        return {"message": f"错误：无法访问照片根目录 '{photo_root}'", "new": 0, "updated": 0, "errors": 1}
+
+    # 首先获取数据库中所有现有照片的映射，避免重复查询
+    existing_photos_map = {}
+    all_existing_photos = Photo.query.all()
+    for photo in all_existing_photos:
+        key = f"{photo.category}/{photo.filename}"
+        existing_photos_map[key] = photo
+
+    # 遍历photo文件夹下的所有子目录
+    for item in all_items:
+        item_path = os.path.join(photo_root, item)
         
-    if not categories:
-        logger.warning("未找到分类文件夹")
-        return {"added": 0, "skipped": 0, "message": "未找到分类文件夹（需在photo下创建子文件夹）"}
-
-    added_count = 0
-    skipped_count = 0
-
-    # 3. 处理每张照片（在应用上下文中执行）
-    with app.app_context():
-        for category in categories:
-            category_photo_folder = os.path.join(photo_root, category)
-            logger.info(f"处理分类: {category}")
+        # 跳过非目录、隐藏文件和thumbnails目录
+        if (not os.path.isdir(item_path) or 
+            item.startswith(('.', '~')) or 
+            item == 'thumbnails'):
+            continue
+        
+        category = item
+        current_app.logger.info(f"开始扫描分类: {category}")
+        
+        # 确保分类缩略图目录存在
+        category_thumb_dir = os.path.join(thumbnail_root, category)
+        os.makedirs(category_thumb_dir, exist_ok=True)
+        
+        try:
+            category_files = os.listdir(item_path)
+        except (PermissionError, NotADirectoryError) as e:
+            current_app.logger.error(f"无法访问分类目录 '{item_path}': {e}")
+            error_count += 1
+            continue
             
-            # 确保缩略图文件夹存在
-            try:
-                os.makedirs(os.path.join(Config.THUMBNAIL_FOLDER, category), exist_ok=True)
-            except Exception as e:
-                logger.error(f"创建缩略图文件夹失败 {category}: {str(e)}")
+        # 遍历分类目录下的文件
+        for filename in category_files:
+            file_path = os.path.join(item_path, filename)
+            
+            # 跳过隐藏文件和目录，只处理文件
+            if (filename.startswith(('.', '~')) or not os.path.isfile(file_path)):
                 continue
-
-            try:
-                files = os.listdir(category_photo_folder)
-                logger.info(f"分类 {category} 中找到 {len(files)} 个文件")
-            except Exception as e:
-                logger.error(f"读取分类文件夹失败 {category}: {str(e)}")
+            
+            # 只处理允许的图片文件
+            if not allowed_file(filename):
+                current_app.logger.debug(f"跳过不支持的文件类型: {filename}")
                 continue
+            
+            # 检查数据库中是否已存在该照片（使用预先构建的映射）
+            photo_key = f"{category}/{filename}"
+            existing_photo = existing_photos_map.get(photo_key)
+            
+            # 定义缩略图路径
+            thumbnail_path = os.path.join(category_thumb_dir, filename)
+            
+            # 生成缩略图（如果不存在，或者原图比缩略图新）
+            need_generate_thumbnail = False
+            thumbnail_generated = False
 
-            for filename in files:
-                photo_path = os.path.join(category_photo_folder, filename)
-
-                # 跳过子文件夹/不支持格式
-                if os.path.isdir(photo_path):
-                    skipped_count += 1
-                    continue
-                if not allowed_file(filename):
-                    skipped_count += 1
-                    continue
-
+            if not os.path.exists(thumbnail_path):
+                need_generate_thumbnail = True
+                current_app.logger.info(f"缩略图不存在，将生成: {thumbnail_path}")
+            else:
                 try:
-                    # 计算文件哈希值
-                    file_hash = get_file_hash(photo_path)
-                    _, ext = os.path.splitext(filename)
-                    new_photo_filename = f"{file_hash}{ext.lower()}"
-                    new_photo_path = os.path.join(category_photo_folder, new_photo_filename)
+                    orig_mtime = os.path.getmtime(file_path)
+                    thumb_mtime = os.path.getmtime(thumbnail_path)
+                    if orig_mtime > thumb_mtime:
+                        need_generate_thumbnail = True
+                        current_app.logger.info(f"原图已更新，重新生成缩略图: {filename}")
+                except OSError as e:
+                    current_app.logger.error(f"无法获取文件修改时间: {file_path} 或 {thumbnail_path}, {e}")
+                    need_generate_thumbnail = True
 
-                    # 重命名文件（使用哈希值作为文件名）
-                    if not os.path.exists(new_photo_path) and photo_path != new_photo_path:
-                        os.rename(photo_path, new_photo_path)
-                        logger.info(f"重命名文件：{filename} -> {new_photo_filename}")
-
-                    # 生成缩略图
-                    thumb_filename = check_and_complement_thumbnail(
-                        new_photo_path, category, new_photo_filename, file_hash
-                    )
-
-                    # 录入数据库
-                    try:
-                        new_photo = Photo(
-                            title=os.path.splitext(filename)[0],
-                            description=f"分类：{category}",
-                            filename=new_photo_filename,
-                            thumbnail=thumb_filename,
-                            category=category
-                        )
-                        db.session.add(new_photo)
-                        db.session.commit()
-                        added_count += 1
-                        logger.info(f"成功添加照片到数据库：{category}/{new_photo_filename}")
-                    except SQLAlchemyError as e:
-                        db.session.rollback()
-                        skipped_count += 1
-                        logger.error(f"数据库操作失败（{category}/{filename}）：{str(e)}")
-                except Exception as e:
-                    skipped_count += 1
-                    logger.error(f"处理照片失败（{category}/{filename}）：{str(e)}")
-
-        db.session.remove()
-
-    result_msg = f"扫描完成：新增{added_count}张，跳过{skipped_count}张"
-    logger.info(result_msg)
-    return {
-        "added": added_count,
-        "skipped": skipped_count,
-        "message": result_msg
-    }
+            if need_generate_thumbnail:
+                if create_thumbnail(file_path, thumbnail_path):
+                    thumbnail_generated = True
+                    current_app.logger.info(f"已生成/更新缩略图: {thumbnail_path}")
+                else:
+                    error_count += 1
+                    current_app.logger.error(f"生成缩略图失败，跳过文件: {file_path}")
+                    continue
+            
+            if existing_photo:
+                # 如果缩略图是新生成的，更新数据库记录
+                if thumbnail_generated:
+                    existing_photo.thumbnail = filename
+                    update_count += 1
+                    current_app.logger.debug(f"更新数据库记录: {category}/{filename}")
+            else:
+                # 新增照片记录
+                photo_title = os.path.splitext(filename)[0]
+                new_photo = Photo(
+                    title=photo_title,
+                    filename=filename,
+                    thumbnail=filename,
+                    category=category
+                )
+                db.session.add(new_photo)
+                new_count += 1
+                current_app.logger.info(f"新增数据库记录: {category}/{filename}")
+                # 添加到映射中避免重复添加
+                existing_photos_map[photo_key] = new_photo
+    
+    try:
+        db.session.commit()
+        result_msg = f"扫描完成，新增 {new_count} 张照片，更新 {update_count} 张照片记录，遇到 {error_count} 个错误"
+        current_app.logger.info(result_msg)
+        return {
+            "message": result_msg,
+            "new": new_count,
+            "updated": update_count,
+            "errors": error_count
+        }
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"数据库提交失败: {str(e)}")
+        return {
+            "message": f"扫描失败（数据库错误）: {str(e)}",
+            "new": 0,
+            "updated": 0,
+            "errors": error_count + 1
+        }
