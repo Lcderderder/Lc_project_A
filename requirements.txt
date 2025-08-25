@@ -6,3 +6,4 @@ pyqt5 == 5.15.11
 requests == 2.26.0
 sqlalchemy == 1.4.23
 Werkzeug == 2.0.1
+flask-wtf
