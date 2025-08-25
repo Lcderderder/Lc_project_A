@@ -1,3 +1,5 @@
+# [file name]: app.py
+# [修改后的文件内容]
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
@@ -48,11 +50,15 @@ def create_app():
                 try:
                     is_scanning = True
                     logger.info("后端启动完成，自动触发扫描（已加锁，禁止API访问）...")
-                    scan_result = photo_processing.scan_photo_folder()
+                    # 修改：传递app实例给scan_photo_folder
+                    scan_result = photo_processing.scan_photo_folder(app)
                     logger.info(f"自动扫描结果：{scan_result['message']}")
-                finally:
+                except Exception as e:
+                    logger.error(f"自动扫描失败: {str(e)}")
                     is_scanning = False
+                finally:
                     db_lock.release()
+                    is_scanning = False  # 确保扫描状态被重置
                     logger.info("数据库锁已释放，API可正常访问")
             else:
                 logger.warning("获取数据库锁失败，扫描已在进行中")
@@ -83,7 +89,6 @@ def photo_file(category, filename):
 @app.route('/photo/thumbnails/<category>/<filename>')
 def photo_thumbnail(category, filename):
     thumb_folder = os.path.join(app.config['THUMBNAIL_FOLDER'], category)
-    logger.info(f"访问缩略图：{thumb_folder}/{filename}")
     return send_from_directory(thumb_folder, filename)
 
 # ------------------------------
@@ -92,7 +97,7 @@ def api_health():
     """健康检查：返回后端状态+扫描状态+数据库状态"""
     global is_scanning
     health_data = {
-        "backend_running": True,
+        "backend_running": True,  # 总是返回True，因为如果这个端点能响应，说明后端在运行
         "db_ready": False,
         "scan_finished": not is_scanning,
         "message": "后端运行中，数据库更新中（扫描未完成），暂时无法访问"
@@ -105,22 +110,27 @@ def api_health():
                 photo_count = Photo.query.count()
                 health_data["db_ready"] = True
                 health_data["message"] = f"后端正常运行，数据库就绪（共{photo_count}张照片）"
-            except Exception:
+            except Exception as e:
                 health_data["db_ready"] = False
-                health_data["message"] = "后端运行中，数据库未初始化（首次扫描未完成）"
+                health_data["message"] = f"后端运行中，数据库未初始化（{str(e)}）"
             finally:
                 db_lock.release()
+        else:
+            health_data["message"] = "数据库正在被其他操作占用，请稍后"
 
     return jsonify(health_data), 200
 
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
     """获取分类（基于文件夹，不依赖数据库，无需锁）"""
-    categories = [
-        f for f in os.listdir(app.config['PHOTO_FOLDER']) 
-        if os.path.isdir(os.path.join(app.config['PHOTO_FOLDER'], f)) and f != 'thumbnails'
-    ]
-    return jsonify(categories)
+    try:
+        categories = [
+            f for f in os.listdir(app.config['PHOTO_FOLDER']) 
+            if os.path.isdir(os.path.join(app.config['PHOTO_FOLDER'], f)) and f != 'thumbnails'
+        ]
+        return jsonify(categories)
+    except Exception as e:
+        return jsonify({"error": f"获取分类失败: {str(e)}"}), 500
 
 @app.route('/api/photos', methods=['GET'])
 def get_photos():
@@ -203,4 +213,5 @@ def internal_error(error):
     return jsonify({'error': '服务器内部错误'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # 禁用调试模式的重载器，避免重复启动扫描线程
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5000)
