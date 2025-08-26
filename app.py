@@ -148,6 +148,7 @@ def auto_scan_after_start(app):
 
 if __name__ == '__main__':
     app = create_app()
+    
     # 启动时在后台线程执行自动扫描
     import threading
     threading.Thread(target=auto_scan_after_start, args=(app,), daemon=True).start()
