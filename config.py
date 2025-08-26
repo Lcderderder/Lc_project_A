@@ -49,3 +49,4 @@ class Config:
                 except OSError as e:
                     app.logger.error(f"无法创建文件夹 {folder}: {str(e)}")
                     raise
+                    
