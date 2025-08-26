@@ -9,6 +9,7 @@
         :root {
             --primary: #8a7dd6;
             --primary-light: #a59bd9;
+            --primary-gradient: linear-gradient(135deg, #8a7dd6, #d67dc8);
             --secondary: #ff9ab8;
             --light: #f8f9fa;
             --dark: #4a4a68;
@@ -28,13 +29,29 @@
         }
         
         body {
-            background: linear-gradient(-45deg, #f8f2ff, #ffeef4, #e6f0ff, #e6fffd);
+            background: linear-gradient(-45deg, #f0e6ff, #ffd6e7, #e6e6ff, #d6faff);
             background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
+            animation: gradientBG 18s ease infinite;
             min-height: 100vh;
             padding: 20px;
             line-height: 1.6;
             position: relative;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(255, 182, 193, 0.4) 0%, transparent 25%),
+                radial-gradient(circle at 80% 20%, rgba(173, 216, 230, 0.4) 0%, transparent 25%),
+                radial-gradient(circle at 40% 40%, rgba(221, 160, 221, 0.3) 0%, transparent 25%);
+            pointer-events: none;
+            z-index: -1;
         }
         
         @keyframes gradientBG {
@@ -60,21 +77,39 @@
             box-shadow: var(--shadow);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.6);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header-container::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 50px;
+            height: 50px;
+            background: var(--primary-gradient);
+            border-radius: 50%;
+            opacity: 0.6;
+            z-index: 0;
         }
         
         .logo {
             display: flex;
             align-items: center;
             gap: 12px;
+            position: relative;
+            z-index: 1;
         }
         
         .logo-icon {
             font-size: 2.2rem;
             color: var(--secondary);
-            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            background: var(--primary-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             animation: pulse 2s infinite;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
         }
         
         @keyframes pulse {
@@ -85,7 +120,7 @@
         .logo h1 {
             font-size: 1.8rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background: var(--primary-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -94,6 +129,7 @@
         .search-box {
             position: relative;
             width: 380px;
+            z-index: 1;
         }
         
         .search-input {
@@ -134,6 +170,7 @@
             scrollbar-width: thin;
             box-shadow: var(--shadow);
             border: 1px solid rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(5px);
         }
         
         .categories::-webkit-scrollbar {
@@ -155,18 +192,38 @@
             cursor: pointer;
             white-space: nowrap;
             transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .category-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: var(--transition);
+        }
+        
+        .category-btn:hover::before {
+            left: 100%;
         }
         
         .category-btn:hover {
             background: var(--primary-light);
             color: white;
             transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(138, 125, 214, 0.3);
         }
         
         .category-btn.active {
-            background: var(--primary);
+            background: var(--primary-gradient);
             color: white;
-            border-color: var(--primary);
+            border-color: transparent;
+            box-shadow: 0 5px 15px rgba(138, 125, 214, 0.4);
+            transform: translateY(-2px);
         }
         
         /* 照片网格 */
@@ -186,11 +243,29 @@
             height: 100%;
             display: flex;
             flex-direction: column;
+            transform: translateY(0);
         }
         
         .photo-card:hover {
             transform: translateY(-8px);
             box-shadow: var(--shadow-hover);
+        }
+        
+        .photo-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: var(--primary-gradient);
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 2;
+        }
+        
+        .photo-card:hover::before {
+            opacity: 1;
         }
         
         .photo-img {
@@ -313,6 +388,23 @@
             font-weight: 500;
             transition: var(--transition);
             box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .page-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            transition: var(--transition);
+        }
+        
+        .page-btn:hover::before {
+            left: 100%;
         }
         
         .page-btn:hover:not(:disabled) {
@@ -344,6 +436,7 @@
             color: var(--gray);
             margin-top: 30px;
             border: 1px solid rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(5px);
         }
         
         /* 图片查看器 */
@@ -353,12 +446,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.95);
+            background-color: rgba(0, 0, 0, 0.92);
             display: none;
             justify-content: center;
             align-items: center;
             z-index: 1000;
             padding: 20px;
+            backdrop-filter: blur(8px);
         }
         
         .image-viewer.active {
@@ -375,6 +469,9 @@
             position: relative;
             max-width: 90%;
             max-height: 90%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         
         .viewer-image {
@@ -383,12 +480,17 @@
             object-fit: contain;
             border-radius: 8px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+        
+        .viewer-image:hover {
+            transform: scale(1.02);
         }
         
         .close-btn {
             position: absolute;
-            top: -50px;
-            right: -50px;
+            top: -40px;
+            right: -40px;
             color: white;
             font-size: 2.2rem;
             cursor: pointer;
@@ -401,11 +503,14 @@
             justify-content: center;
             transition: var(--transition);
             opacity: 0.8;
+            z-index: 1001;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
         }
         
         .close-btn:hover {
             opacity: 1;
-            transform: scale(1.1);
+            transform: scale(1.1) rotate(90deg);
+            color: var(--secondary);
         }
         
         .viewer-caption {
@@ -414,6 +519,47 @@
             margin-top: 20px;
             font-size: 1.3rem;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            max-width: 80%;
+        }
+        
+        /* 导航按钮 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.3);
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            opacity: 0.7;
+            z-index: 1001;
+            backdrop-filter: blur(5px);
+        }
+        
+        .nav-btn:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.5);
+            transform: translateY(-50%) scale(1.1);
+        }
+        
+        .prev-btn {
+            left: 20px;
+        }
+        
+        .next-btn {
+            right: 20px;
         }
         
         /* 响应式设计 */
@@ -445,9 +591,15 @@
             }
             
             .close-btn {
-                top: -40px;
-                right: 0;
+                top: -30px;
+                right: -30px;
                 font-size: 1.8rem;
+            }
+            
+            .nav-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
             }
         }
         
@@ -469,6 +621,22 @@
             .page-btn {
                 padding: 8px 15px;
                 font-size: 0.9rem;
+            }
+            
+            .close-btn {
+                top: -20px;
+                right: -10px;
+            }
+            
+            .nav-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+            
+            .viewer-caption {
+                font-size: 1.1rem;
+                padding: 8px 16px;
             }
         }
     </style>
@@ -514,6 +682,13 @@
 
     <!-- 图片查看器 -->
     <div class="image-viewer" id="imageViewer">
+        <button class="nav-btn prev-btn" id="prev-image">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <button class="nav-btn next-btn" id="next-image">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        
         <div class="viewer-content">
             <button class="close-btn" id="closeViewer">
                 <i class="fas fa-times"></i>
@@ -530,6 +705,7 @@
         let currentPage = 1;
         let totalPages = 1;
         let totalPhotos = 0;
+        let currentViewerIndex = 0;
 
         const currentFilter = {
             category: '',  // 初始为空
@@ -548,7 +724,9 @@
             viewerImage: document.getElementById('viewerImage'),
             viewerCaption: document.getElementById('viewerCaption'),
             pagination: document.getElementById('pagination'),
-            closeViewer: document.getElementById('closeViewer')
+            closeViewer: document.getElementById('closeViewer'),
+            prevImageBtn: document.getElementById('prev-image'),
+            nextImageBtn: document.getElementById('next-image')
         };
 
         // 初始化
@@ -587,6 +765,19 @@
                 if (currentPage < totalPages) {
                     currentPage++;
                     loadAndRenderPhotos();
+                }
+            });
+
+            // 图片导航事件
+            elements.prevImageBtn.addEventListener('click', showPrevImage);
+            elements.nextImageBtn.addEventListener('click', showNextImage);
+
+            // 键盘导航
+            document.addEventListener('keydown', (e) => {
+                if (elements.imageViewer.classList.contains('active')) {
+                    if (e.key === 'Escape') closeImageViewer();
+                    if (e.key === 'ArrowLeft') showPrevImage();
+                    if (e.key === 'ArrowRight') showNextImage();
                 }
             });
         }
@@ -711,8 +902,9 @@
             elements.photoContainer.innerHTML = `<div class="photo-grid">${photosHtml}</div>`;
 
             // 绑定图片点击事件
-            document.querySelectorAll('.photo-img').forEach(imgContainer => {
+            document.querySelectorAll('.photo-img').forEach((imgContainer, index) => {
                 imgContainer.addEventListener('click', () => {
+                    currentViewerIndex = index;
                     openImageViewer(
                         imgContainer.dataset.original,
                         imgContainer.dataset.title
@@ -740,6 +932,24 @@
         function closeImageViewer() {
             elements.imageViewer.classList.remove('active');
             document.body.style.overflow = 'auto';
+        }
+
+        function showPrevImage() {
+            const photos = document.querySelectorAll('.photo-img');
+            if (photos.length === 0) return;
+            
+            currentViewerIndex = (currentViewerIndex - 1 + photos.length) % photos.length;
+            const photo = photos[currentViewerIndex];
+            openImageViewer(photo.dataset.original, photo.dataset.title);
+        }
+
+        function showNextImage() {
+            const photos = document.querySelectorAll('.photo-img');
+            if (photos.length === 0) return;
+            
+            currentViewerIndex = (currentViewerIndex + 1) % photos.length;
+            const photo = photos[currentViewerIndex];
+            openImageViewer(photo.dataset.original, photo.dataset.title);
         }
 
         // 状态显示函数
@@ -771,6 +981,7 @@
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
         }
+
         // 全局函数
         window.loadAndRenderPhotos = loadAndRenderPhotos;
     </script>
