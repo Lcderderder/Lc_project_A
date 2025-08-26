@@ -60,3 +60,4 @@ class Photo(db.Model):
                     logger.info(f"已删除缩略图: {thumb_path}")
                 except Exception as e:
                     logger.error(f"删除缩略图失败 ({thumb_path}): {str(e)}")
+                    
