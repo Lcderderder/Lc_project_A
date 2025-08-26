@@ -188,3 +188,4 @@ def scan_photo_folder(app):
             "updated": 0,
             "errors": error_count + 1
         }
+        
