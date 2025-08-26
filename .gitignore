@@ -1,0 +1,7 @@
+env
+__pycache__
+.vs
+photo
+app.db
+photo_data.db
+crash_reports
