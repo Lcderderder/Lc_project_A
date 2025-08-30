@@ -12,7 +12,7 @@ class PhotoBackendManager(QMainWindow):
     # 自定义信号
     process_output = pyqtSignal(str)
     health_check_result = pyqtSignal(dict)
-    health_status_changed = pyqtSignal(bool)  # 新增：健康状态变化信号（True=正常，False=故障）
+    health_status_changed = pyqtSignal(bool)  # 健康状态变化信号（True=正常，False=故障）
     
     def __init__(self):
         super().__init__()
