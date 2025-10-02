@@ -1,0 +1,10 @@
+flask == 2.0.1
+flask-sqlalchemy == 2.5.1
+flask-cors == 3.0.10
+flask-wtf == 1.0.0
+pillow == 11.3.0
+pyqt5 == 5.15.11
+requests == 2.26.0
+sqlalchemy == 1.4.23
+Werkzeug == 2.0.1
+pywin32
